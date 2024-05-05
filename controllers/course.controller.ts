@@ -175,9 +175,15 @@ export const getSingleCourse = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const courseId = req.params.id;
-      const course = await CourseModel.findById(req.params.id).select(
+      const course: any = await CourseModel.findOne({ _id: req.params.id, status: 'Public' }).select(
         "-courseData.videoUrl -courseData.suggestion -courseData.questions -courseData.links"
       );
+
+      if(!course) {
+        return next(new ErrorHandler("Course not found", 404));
+      }
+
+
       await redis.set(courseId, JSON.stringify(course), "EX", 604800); // 7days
 
       res.status(200).json({
@@ -217,7 +223,7 @@ export const getSingleCourse = CatchAsyncError(
 export const getAllCourses = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const courses = await CourseModel.find().select(
+      const courses = await CourseModel.find({ status: 'Public' }).select(
         "-courseData.videoUrl -courseData.suggestion -courseData.questions -courseData.links"
       );
 
