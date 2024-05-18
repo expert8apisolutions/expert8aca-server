@@ -24,6 +24,27 @@ const recusiveDelete = async (folderId: string) => {
     await FolderModel.findByIdAndDelete(folderId);
 };
 
+export const updatePlayBackId = CatchAsyncError(
+    async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const { assetId, playbackId } = req.body;
+            const file = await FileModel.findOneAndUpdate(
+                { assetId }, {
+                $set: {
+                    playbackId
+                }
+            }, { new: true });
+            res.status(201).json({
+                success: true,
+                file,
+            });
+        }
+        catch (error: any) {
+            return next(new ErrorHandler(error.message, 500));
+        }
+    }
+)
+
 export const createFolder = CatchAsyncError(
     async (req: Request, res: Response, next: NextFunction) => {
         try {

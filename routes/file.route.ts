@@ -1,6 +1,6 @@
 import express from "express";
 import { authorizeRoles, isAutheticated } from "../middleware/auth";
-import { addFile, createFolder, deleteFile, deleteFolder, editFile, editFolder, getFolderAndFile, getSingleFolder } from "../controllers/file.controller";
+import { addFile, createFolder, deleteFile, deleteFolder, editFile, editFolder, getFolderAndFile, getSingleFolder, updatePlayBackId } from "../controllers/file.controller";
 
 const fileRouter = express.Router();
 
@@ -39,5 +39,9 @@ fileRouter.delete(
 fileRouter.delete(
     "/file/delete-file/:id",
     deleteFile,
+);
+fileRouter.post(
+    "/file/update-playback",
+    updatePlayBackId,
 );
 export default fileRouter;
