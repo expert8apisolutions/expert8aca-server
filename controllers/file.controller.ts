@@ -28,15 +28,22 @@ export const updatePlayBackId = CatchAsyncError(
     async (req: Request, res: Response, next: NextFunction) => {
         try {
             const { assetId, playbackId } = req.body;
-            const file = await FileModel.findOneAndUpdate(
-                { assetId }, {
-                $set: {
-                    playbackId
-                }
-            }, { new: true });
+            const file = await FileModel.findOne({
+                assetId
+            });
+
+            if (!file) {
+                return next(new ErrorHandler("File not found", 404));
+            }
+
+            if(file.assetId){
+                return next(new ErrorHandler("PlaybackId already exists", 400));            
+            }
+
+            file.playbackId = playbackId;
+            await file.save();
             res.status(201).json({
                 success: true,
-                file,
             });
         }
         catch (error: any) {
