@@ -7,6 +7,7 @@ export interface IFile extends Document {
     parentId: string | null;
     playbackId?: string | null;
     assetId?: string;
+    status?: string;
 }
 
 const fileSchema = new Schema<IFile>({
@@ -21,6 +22,9 @@ const fileSchema = new Schema<IFile>({
     format: {
         type: String,
         required: true
+    },
+    status: {
+        type: String,
     },
     assetId: {
         type: String,

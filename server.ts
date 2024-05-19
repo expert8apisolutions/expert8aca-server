@@ -29,19 +29,18 @@ cron.schedule(`*/${cronJobInMinute} * * * *`, async () => {
         const fileNotHavePlaybackId: IFile[] = await FileModel.find({
             $or: [
                 { playbackId: { $eq: null } },
-                { playbackId: { $eq: "" } }
+                { playbackId: { $eq: "" } },
+                { status: { $eq: "preparing" } },
             ]
         });
-        console.log('fond file without playbackId ', fileNotHavePlaybackId.length)
         if (fileNotHavePlaybackId.length > 0) {
             fileNotHavePlaybackId.forEach(async (file) => {
-                if (file.assetId) {
+                if (file.assetId && (file.status === "preparing" || !file.playbackId)) {
                     const status = await checkAssetStatus(file.assetId);
-                    if (status.playbackId) {
-                        await FileModel.findByIdAndUpdate(file._id, {
-                            playbackId: status.playbackId,
-                        });
-                    }
+                    await FileModel.findByIdAndUpdate(file._id, {
+                        playbackId: status.playbackId || null,
+                        status: status.status
+                    });
                 }
             })
         }

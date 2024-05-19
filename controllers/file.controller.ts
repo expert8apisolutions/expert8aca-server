@@ -29,18 +29,16 @@ export const updatePlayBackId = CatchAsyncError(
         try {
             const { assetId, playbackId } = req.body;
             const file = await FileModel.findOne({
-                assetId
+                assetId,
+                status: "preparing",
             });
 
             if (!file) {
                 return next(new ErrorHandler("File not found", 404));
             }
 
-            if(file.assetId){
-                return next(new ErrorHandler("PlaybackId already exists", 400));            
-            }
-
             file.playbackId = playbackId;
+            file.status = "ready";
             await file.save();
             res.status(201).json({
                 success: true,
@@ -147,7 +145,7 @@ export const editFolder = CatchAsyncError(
 export const addFile = CatchAsyncError(
     async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const { name, sizeInMB, format, parentId, assetId, playbackId } =
+            const { name, sizeInMB, format, parentId, assetId, playbackId, status } =
                 req.body;
 
             const checkLimit = await getSumSizeAllFile();
@@ -172,6 +170,7 @@ export const addFile = CatchAsyncError(
                     parentId,
                     assetId,
                     playbackId,
+                    status,
                 };
                 const result = await FileModel.create(file);
                 folder.childFiles.push({
@@ -190,6 +189,7 @@ export const addFile = CatchAsyncError(
                     parentId: null,
                     assetId,
                     playbackId,
+                    status,
                 };
                 const result = await FileModel.create(file);
                 res.status(200).json({
