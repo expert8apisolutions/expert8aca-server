@@ -7,6 +7,8 @@ import { checkVideoReady } from "../server";
 import axios from "axios";
 
 const LIMIT_STORAGE_IN_GB = +(process?.env?.LIMIT_STORAGE_IN_GB ?? 5);
+const LABEL_ID = process?.env?.STREAM_LABEL_ID;
+console.log("🚀 ~ LABEL_ID:", LABEL_ID)
 
 const deleteAssetResource = async (assetId: string, awsId: string) => {
     try {
@@ -134,6 +136,7 @@ export const getSingleFolder = CatchAsyncError(
                 folder,
                 sizeInMB,
                 sizeLimitInGB: LIMIT_STORAGE_IN_GB,
+                labelId: LABEL_ID,
                 sizeUsedInGB: sizeInMB / 1000,
             });
         } catch (error: any) {
@@ -286,6 +289,7 @@ export const getFolderAndFile = CatchAsyncError(
                     files,
                     sizeInMB,
                     sizeLimitInGB: LIMIT_STORAGE_IN_GB,
+                    labelId: LABEL_ID,
                     sizeUsedInGB: sizeInMB / 1000,
                 });
             }
