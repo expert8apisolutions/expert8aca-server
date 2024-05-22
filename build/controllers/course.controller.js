@@ -136,7 +136,10 @@ exports.editCourse = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, res, ne
 exports.getSingleCourse = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, res, next) => {
     try {
         const courseId = req.params.id;
-        const course = await course_model_1.default.findById(req.params.id).select("-courseData.videoUrl -courseData.suggestion -courseData.questions -courseData.links");
+        const course = await course_model_1.default.findOne({ _id: req.params.id, status: 'Public' }).select("-courseData.videoUrl -courseData.suggestion -courseData.questions -courseData.links");
+        if (!course) {
+            return next(new ErrorHandler_1.default("Course not found", 404));
+        }
         await redis_1.redis.set(courseId, JSON.stringify(course), "EX", 604800); // 7days
         res.status(200).json({
             success: true,
@@ -173,7 +176,7 @@ exports.getSingleCourse = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, re
 // get all courses --- without purchasing
 exports.getAllCourses = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, res, next) => {
     try {
-        const courses = await course_model_1.default.find().select("-courseData.videoUrl -courseData.suggestion -courseData.questions -courseData.links");
+        const courses = await course_model_1.default.find({ status: 'Public' }).select("-courseData.videoUrl -courseData.suggestion -courseData.questions -courseData.links");
         res.status(200).json({
             success: true,
             courses,
