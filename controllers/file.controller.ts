@@ -3,6 +3,7 @@ import { CatchAsyncError } from "../middleware/catchAsyncErrors";
 import ErrorHandler from "../utils/ErrorHandler";
 import FolderModel, { IFolder } from "../models/folder.model";
 import FileModel from "../models/file.model";
+import { checkVideoReady } from "../server";
 
 const LIMIT_STORAGE_IN_GB = +(process?.env?.LIMIT_STORAGE_IN_GB ?? 5);
 
@@ -145,10 +146,10 @@ export const editFolder = CatchAsyncError(
 export const addFile = CatchAsyncError(
     async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const { name, sizeInMB, format, parentId, assetId, playbackId, status } =
+            const { name, sizeInMB, format, parentId, assetId, playbackId, status, awsId } =
                 req.body;
 
-            const checkLimit = await getSumSizeAllFile();
+            const [checkLimit, checkPercent] = await Promise.all([getSumSizeAllFile(), checkVideoReady(assetId)])
             if (checkLimit + sizeInMB > LIMIT_STORAGE_IN_GB * 1000) {
                 return next(
                     new ErrorHandler(
@@ -171,6 +172,8 @@ export const addFile = CatchAsyncError(
                     assetId,
                     playbackId,
                     status,
+                    percent: checkPercent.percent || 0,
+                    awsId,
                 };
                 const result = await FileModel.create(file);
                 folder.childFiles.push({
@@ -190,6 +193,8 @@ export const addFile = CatchAsyncError(
                     assetId,
                     playbackId,
                     status,
+                    percent: checkPercent.percent || 0,
+                    awsId
                 };
                 const result = await FileModel.create(file);
                 res.status(200).json({

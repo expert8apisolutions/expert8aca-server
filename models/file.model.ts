@@ -8,6 +8,8 @@ export interface IFile extends Document {
     playbackId?: string | null;
     assetId?: string;
     status?: string;
+    percent?: number;
+    awsId?: string;
 }
 
 const fileSchema = new Schema<IFile>({
@@ -40,6 +42,16 @@ const fileSchema = new Schema<IFile>({
         required: false,
         default: null,
         ref: 'Folder',
+    },
+    percent: {
+        type: Number,
+        required: false,
+        default: 0,
+    },
+    awsId: {
+        type: String,
+        required: false,
+        default: null,
     }
 }, { timestamps: true });
 
