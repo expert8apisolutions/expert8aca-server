@@ -5,17 +5,17 @@ import FolderModel, { IFolder } from "../models/folder.model";
 import FileModel from "../models/file.model";
 import { checkVideoReady } from "../server";
 import axios from "axios";
+import { headerApiKey } from "../utils/headerApi";
 
 const LIMIT_STORAGE_IN_GB = +(process?.env?.LIMIT_STORAGE_IN_GB ?? 5);
 const LABEL_ID = process?.env?.STREAM_LABEL_ID;
-console.log("🚀 ~ LABEL_ID:", LABEL_ID)
 
 const deleteAssetResource = async (assetId: string, awsId: string) => {
     try {
-        const result = await axios.post(`${process.env.CORE_API_UPLOAD_URL}/delete-asset`,{
+        const result = await axios.post(`${process.env.CORE_API_UPLOAD_URL}/delete-asset`, {
             assetId,
             awsId,
-        });
+        }, { headers: headerApiKey });
         return result;
     } catch (error) {
         console.error("Error during delete asset:", error);

@@ -8,6 +8,7 @@ import mongoose from "mongoose";
 import FileModel, { IFile } from "./models/file.model";
 import { checkAssetStatus } from "./services/mux.service";
 import axios from "axios";
+import { headerApiKey } from "./utils/headerApi";
 require("dotenv").config();
 const server = http.createServer(app);
 
@@ -24,7 +25,7 @@ initSocketServer(server);
 const cronJobInMinute = process.env.MUX_CRONJOB_CHECK_IN_MINUTE
 
 export const checkVideoReady = async (assetId: string) => {
-    const result = await axios.get(`${process.env.CORE_API_UPLOAD_URL}/detail-video/${assetId}`);
+    const result = await axios.get(`${process.env.CORE_API_UPLOAD_URL}/detail-video/${assetId}`, { headers: headerApiKey });
     return {
         percent: result.data.percent || 0,
     }
@@ -44,7 +45,7 @@ cron.schedule(`*/${cronJobInMinute} * * * *`, async () => {
                 if (file.assetId && (file.status === "preparing")) {
                     const percent = await checkVideoReady(file.assetId);
                     await FileModel.findByIdAndUpdate(file._id, {
-                        status: percent.percent === 100 ? "ready" : "preparing",                    
+                        status: percent.percent === 100 ? "ready" : "preparing",
                         percent: percent.percent || 0,
                     });
                 }

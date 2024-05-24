@@ -1,0 +1,1 @@
+export const headerApiKey = { 'x-api-key': process.env.CORE_API_UPLOAD_KEY }
