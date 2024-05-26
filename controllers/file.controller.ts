@@ -3,9 +3,9 @@ import { CatchAsyncError } from "../middleware/catchAsyncErrors";
 import ErrorHandler from "../utils/ErrorHandler";
 import FolderModel, { IFolder } from "../models/folder.model";
 import FileModel from "../models/file.model";
-import { checkVideoReady } from "../server";
 import axios from "axios";
 import { headerApiKey } from "../utils/headerApi";
+import { checkVideoReady } from "../job/checkVideoStatus";
 
 const LIMIT_STORAGE_IN_GB = +(process?.env?.LIMIT_STORAGE_IN_GB ?? 5);
 const LABEL_ID = process?.env?.STREAM_LABEL_ID;
