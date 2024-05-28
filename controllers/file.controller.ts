@@ -3,9 +3,36 @@ import { CatchAsyncError } from "../middleware/catchAsyncErrors";
 import ErrorHandler from "../utils/ErrorHandler";
 import FolderModel, { IFolder } from "../models/folder.model";
 import FileModel from "../models/file.model";
+import { checkVideoReady } from "../server";
+import axios from "axios";
 
 const LIMIT_STORAGE_IN_GB = +(process?.env?.LIMIT_STORAGE_IN_GB ?? 5);
+const LABEL_ID = process?.env?.STREAM_LABEL_ID;
+console.log("🚀 ~ LABEL_ID:", LABEL_ID)
 
+const deleteAssetResource = async (assetId: string, awsId: string) => {
+    try {
+        const result = await axios.post(`${process.env.CORE_API_UPLOAD_URL}/delete-asset`,{
+            assetId,
+            awsId,
+        });
+        return result;
+    } catch (error) {
+        console.error("Error during delete asset:", error);
+    }
+}
+
+const findAndDeleteFile = async (fileId: string) => {
+    const file: any = await FileModel.findById(fileId);
+    if (!file) {
+        return;
+    }
+    if (file.assetId && file.awsId) {
+        deleteAssetResource(file.assetId, file.awsId);
+    }
+    await FileModel.findByIdAndDelete(fileId);
+
+}
 const recusiveDelete = async (folderId: string) => {
     const folder: any = await FolderModel.findById(folderId);
     if (!folder) {
@@ -18,7 +45,7 @@ const recusiveDelete = async (folderId: string) => {
     }
     if (folder.childFiles.length > 0) {
         for (let index = 0; index < folder.childFiles.length; index++) {
-            await FileModel.findByIdAndDelete(folder.childFiles[index]._id);
+            await findAndDeleteFile(folder.childFiles[index]._id)
         }
     }
     await FolderModel.findByIdAndDelete(folderId);
@@ -29,18 +56,16 @@ export const updatePlayBackId = CatchAsyncError(
         try {
             const { assetId, playbackId } = req.body;
             const file = await FileModel.findOne({
-                assetId
+                assetId,
+                status: "preparing",
             });
 
             if (!file) {
                 return next(new ErrorHandler("File not found", 404));
             }
 
-            if(file.assetId){
-                return next(new ErrorHandler("PlaybackId already exists", 400));            
-            }
-
             file.playbackId = playbackId;
+            file.status = "ready";
             await file.save();
             res.status(201).json({
                 success: true,
@@ -111,6 +136,7 @@ export const getSingleFolder = CatchAsyncError(
                 folder,
                 sizeInMB,
                 sizeLimitInGB: LIMIT_STORAGE_IN_GB,
+                labelId: LABEL_ID,
                 sizeUsedInGB: sizeInMB / 1000,
             });
         } catch (error: any) {
@@ -147,10 +173,10 @@ export const editFolder = CatchAsyncError(
 export const addFile = CatchAsyncError(
     async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const { name, sizeInMB, format, parentId, assetId, playbackId } =
+            const { name, sizeInMB, format, parentId, assetId, playbackId, status, awsId } =
                 req.body;
 
-            const checkLimit = await getSumSizeAllFile();
+            const [checkLimit, checkPercent] = await Promise.all([getSumSizeAllFile(), checkVideoReady(assetId)])
             if (checkLimit + sizeInMB > LIMIT_STORAGE_IN_GB * 1000) {
                 return next(
                     new ErrorHandler(
@@ -172,6 +198,9 @@ export const addFile = CatchAsyncError(
                     parentId,
                     assetId,
                     playbackId,
+                    status,
+                    percent: checkPercent.percent || 0,
+                    awsId,
                 };
                 const result = await FileModel.create(file);
                 folder.childFiles.push({
@@ -190,6 +219,9 @@ export const addFile = CatchAsyncError(
                     parentId: null,
                     assetId,
                     playbackId,
+                    status,
+                    percent: checkPercent.percent || 0,
+                    awsId
                 };
                 const result = await FileModel.create(file);
                 res.status(200).json({
@@ -257,6 +289,7 @@ export const getFolderAndFile = CatchAsyncError(
                     files,
                     sizeInMB,
                     sizeLimitInGB: LIMIT_STORAGE_IN_GB,
+                    labelId: LABEL_ID,
                     sizeUsedInGB: sizeInMB / 1000,
                 });
             }
@@ -275,6 +308,7 @@ export const deleteFileInFolder = CatchAsyncError(
                 return next(new ErrorHandler("File not found", 404));
             }
             await file.deleteOne({ id: fileId });
+            findAndDeleteFile(fileId);
             res.status(200).json({
                 success: true,
                 message: "File deleted successfully",
@@ -339,6 +373,7 @@ export const deleteFile = CatchAsyncError(
                 return next(new ErrorHandler("File not found", 404));
             }
             await FileModel.findByIdAndDelete(fileId);
+            findAndDeleteFile(fileId);
             res.status(200).json({
                 success: true,
                 message: "File deleted successfully",

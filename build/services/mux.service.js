@@ -8,17 +8,16 @@ const mux_node_1 = __importDefault(require("@mux/mux-node"));
 const mux = new mux_node_1.default();
 const checkAssetStatus = async (assetId) => {
     const asset = await mux.video.assets.retrieve(assetId);
-    if (asset.status === "ready") {
-        const playbackIds = asset.playback_ids;
-        if (Array.isArray(playbackIds)) {
-            const playbackId = playbackIds.find((id) => id.policy === "public");
-            if (playbackId) {
-                return {
-                    status: asset.status,
-                    errors: asset.errors,
-                    playbackId: playbackId.id,
-                };
-            }
+    console.log("🚀 ~ checkAssetStatus ~ asset:", asset);
+    const playbackIds = asset.playback_ids;
+    if (Array.isArray(playbackIds)) {
+        const playbackId = playbackIds.find((id) => id.policy === "public");
+        if (playbackId) {
+            return {
+                status: asset.status,
+                errors: asset.errors,
+                playbackId: playbackId.id,
+            };
         }
     }
     return {

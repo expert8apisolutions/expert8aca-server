@@ -37,6 +37,9 @@ const fileSchema = new mongoose_1.Schema({
         type: String,
         required: true
     },
+    status: {
+        type: String,
+    },
     assetId: {
         type: String,
         required: true
@@ -51,6 +54,16 @@ const fileSchema = new mongoose_1.Schema({
         required: false,
         default: null,
         ref: 'Folder',
+    },
+    percent: {
+        type: Number,
+        required: false,
+        default: 0,
+    },
+    awsId: {
+        type: String,
+        required: false,
+        default: null,
     }
 }, { timestamps: true });
 const FileModel = mongoose_1.default.model('File', fileSchema);

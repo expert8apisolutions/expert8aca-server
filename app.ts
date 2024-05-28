@@ -15,6 +15,8 @@ import ebookModel from "./models/ebook.model";
 import ebookRouter from "./routes/ebook.route";
 import blogRouter from "./routes/blog.route";
 import fileRouter from "./routes/file.route";
+import userProgressRoute from "./routes/userProgress.route";
+
 
 
 
