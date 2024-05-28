@@ -15,6 +15,7 @@ import ebookModel from "./models/ebook.model";
 import ebookRouter from "./routes/ebook.route";
 import blogRouter from "./routes/blog.route";
 import userProgressRoute from "./routes/userProgress.route";
+import fileRouter from "./routes/file.route";
 
 
 
@@ -52,6 +53,7 @@ app.use(
   analyticsRouter,
   layoutRouter,
   blogRouter,
+  fileRouter,
   userProgressRoute,
 );
 
