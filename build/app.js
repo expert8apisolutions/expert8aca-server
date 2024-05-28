@@ -19,7 +19,7 @@ const layout_route_1 = __importDefault(require("./routes/layout.route"));
 const express_rate_limit_1 = require("express-rate-limit");
 const ebook_route_1 = __importDefault(require("./routes/ebook.route"));
 const blog_route_1 = __importDefault(require("./routes/blog.route"));
-const file_route_1 = __importDefault(require("./routes/file.route"));
+const userProgress_route_1 = __importDefault(require("./routes/userProgress.route"));
 // body parser
 exports.app.use(express_1.default.json({ limit: "50mb" }));
 // cookie parser
@@ -37,7 +37,7 @@ const limiter = (0, express_rate_limit_1.rateLimit)({
     legacyHeaders: false,
 });
 // routes
-exports.app.use("/api/v1", user_route_1.default, ebook_route_1.default, order_route_1.default, course_route_1.default, notification_route_1.default, analytics_route_1.default, layout_route_1.default, blog_route_1.default, file_route_1.default);
+exports.app.use("/api/v1", user_route_1.default, ebook_route_1.default, order_route_1.default, course_route_1.default, notification_route_1.default, analytics_route_1.default, layout_route_1.default, blog_route_1.default, userProgress_route_1.default);
 exports.app.get("/test", (req, res, next) => {
     res.status(200).json({
         succcess: true,
