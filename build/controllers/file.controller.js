@@ -8,17 +8,17 @@ const catchAsyncErrors_1 = require("../middleware/catchAsyncErrors");
 const ErrorHandler_1 = __importDefault(require("../utils/ErrorHandler"));
 const folder_model_1 = __importDefault(require("../models/folder.model"));
 const file_model_1 = __importDefault(require("../models/file.model"));
-const server_1 = require("../server");
 const axios_1 = __importDefault(require("axios"));
+const headerApi_1 = require("../utils/headerApi");
+const checkVideoStatus_1 = require("../job/checkVideoStatus");
 const LIMIT_STORAGE_IN_GB = +(process?.env?.LIMIT_STORAGE_IN_GB ?? 5);
 const LABEL_ID = process?.env?.STREAM_LABEL_ID;
-console.log("🚀 ~ LABEL_ID:", LABEL_ID);
 const deleteAssetResource = async (assetId, awsId) => {
     try {
         const result = await axios_1.default.post(`${process.env.CORE_API_UPLOAD_URL}/delete-asset`, {
             assetId,
             awsId,
-        });
+        }, { headers: headerApi_1.headerApiKey });
         return result;
     }
     catch (error) {
@@ -154,7 +154,7 @@ exports.editFolder = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, res, ne
 exports.addFile = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, res, next) => {
     try {
         const { name, sizeInMB, format, parentId, assetId, playbackId, status, awsId } = req.body;
-        const [checkLimit, checkPercent] = await Promise.all([getSumSizeAllFile(), (0, server_1.checkVideoReady)(assetId)]);
+        const [checkLimit, checkPercent] = await Promise.all([getSumSizeAllFile(), (0, checkVideoStatus_1.checkVideoReady)(assetId)]);
         if (checkLimit + sizeInMB > LIMIT_STORAGE_IN_GB * 1000) {
             return next(new ErrorHandler_1.default(`Storage limit exceeded. Limit is ${LIMIT_STORAGE_IN_GB} GB`, 400));
         }
