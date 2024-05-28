@@ -4,10 +4,7 @@ import connectDB from "./utils/db";
 import { initSocketServer } from "./socketServer";
 import { app } from "./app";
 import cron from 'node-cron';
-import mongoose from "mongoose";
-import FileModel, { IFile } from "./models/file.model";
-import { checkAssetStatus } from "./services/mux.service";
-import axios from "axios";
+import { jobCheckVideoStatus } from "./job/checkVideoStatus";
 require("dotenv").config();
 const server = http.createServer(app);
 
@@ -21,36 +18,12 @@ cloudinary.config({
 
 initSocketServer(server);
 
-const cronJobInMinute = process.env.MUX_CRONJOB_CHECK_IN_MINUTE
-
-export const checkVideoReady = async (assetId: string) => {
-    const result = await axios.get(`${process.env.CORE_API_UPLOAD_URL}/detail-video/${assetId}`);
-    return {
-        percent: result.data.percent || 0,
-    }
-}
+const cronJobInMinute = process.env.CRONJOB_CHECK_IN_MINUTE
 
 cron.schedule(`*/${cronJobInMinute} * * * *`, async () => {
     console.log(` cronjob running every ${cronJobInMinute} minutes `)
-    const isMongoConnected = mongoose.connection.readyState === 1;
-    if (isMongoConnected) {
-        const fileNotHavePlaybackId: IFile[] = await FileModel.find({
-            $or: [
-                { status: { $eq: "preparing" } },
-            ]
-        });
-        if (fileNotHavePlaybackId.length > 0) {
-            fileNotHavePlaybackId.forEach(async (file) => {
-                if (file.assetId && (file.status === "preparing")) {
-                    const percent = await checkVideoReady(file.assetId);
-                    await FileModel.findByIdAndUpdate(file._id, {
-                        status: percent.percent === 100 ? "ready" : "preparing",                    
-                        percent: percent.percent || 0,
-                    });
-                }
-            })
-        }
-    }
+    jobCheckVideoStatus()
+
 });
 
 // create server
