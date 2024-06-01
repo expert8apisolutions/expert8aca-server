@@ -63,7 +63,7 @@ export const addCourseToUser = CatchAsyncError(
 
       try {
         if (user) {
-          await sendMail({
+          sendMail({
             email: user.email,
             subject: "Order Confirmation",
             template: "order-confirmation.ejs",
@@ -71,7 +71,8 @@ export const addCourseToUser = CatchAsyncError(
           });
         }
       } catch (error: any) {
-        return next(new ErrorHandler(error.message, 500));
+        console.log("🚀 ~ error:", error)
+        // return next(new ErrorHandler(error.message, 500));
       }
 
       user?.courses.push(course?._id);
@@ -175,14 +176,16 @@ export const getSingleCourse = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const courseId = req.params.id;
-      const course: any = await CourseModel.findOne({ _id: req.params.id, status: 'Public' }).select(
-        "-courseData.videoUrl -courseData.suggestion -courseData.questions -courseData.links"
+      let course: any = await CourseModel.findOne({ _id: req.params.id, status: 'Public' }).populate('quiz.postTestId').select(
+        "-courseData.videoUrl -courseData.suggestion -courseData.questions -courseData.links -quiz.postTestId.quizItem"
       );
 
       if(!course) {
         return next(new ErrorHandler("Course not found", 404));
       }
 
+     course.quiz.postTestId.total = course.quiz.postTestId.quizItem.length
+     course.quiz.postTestId.quizItem = undefined
 
       await redis.set(courseId, JSON.stringify(course), "EX", 604800); // 7days
 
