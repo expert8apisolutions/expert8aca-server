@@ -4,6 +4,14 @@ import ErrorHandler from "../utils/ErrorHandler";
 import QuizModel from "../models/quiz.model";
 import CourseModel from "../models/course.model";
 import QuizSubmissionModel from "../models/quizSubmission.model";
+import mongoose, { mongo } from "mongoose";
+
+const QUIZ_STAGE = {
+    NOT_STARTED: "NOT_STARTED",
+    PENDING: "PENDING",
+    COMPLETED: "COMPLETED",
+    FAILED: "FAILED",
+}
 
 export const createQuiz = CatchAsyncError(
     async (req: Request, res: Response, next: NextFunction) => {
@@ -98,62 +106,6 @@ export const updateQuiz = CatchAsyncError(
     }
 );
 
-export const getQuizUser = CatchAsyncError(
-    async (req: Request, res: Response, next: NextFunction) => {
-        try {
-            const { course_id, type } = req.query;
-            const userCourseList = req.user?.courses;
-            const courseExists = userCourseList?.find(
-                (course: any) => course._id.toString() === course_id
-            );
-
-            if (!courseExists) {
-                return next(
-                    new ErrorHandler("You are not eligible to access this course", 404)
-                );
-            }
-
-            const course = await CourseModel.findById(course_id).select("quiz");
-
-            if (type === "pre-test") {
-                const quiz = await QuizModel.findById(course?.quiz?.preTestId).lean()
-                if (!quiz) {
-                    return next(new ErrorHandler("Quiz not found", 404));
-                }
-                const newResult = {
-                    ...quiz,
-                    quizItem: quiz.quizItem.map((item: any) => {
-                        return {
-                            ...item,
-                            answer: undefined,
-                        };
-                    }),
-                }
-                console.log("🚀 ~ newResult:", newResult.quizItem[0])
-                return res.status(200).json({
-                    success: true,
-                    quiz: newResult,
-                });
-            }
-
-            if (type === "post-test") {
-                const quiz = await QuizModel.findById(course?.quiz?.postTestId);
-                if (!quiz) {
-                    return next(new ErrorHandler("Quiz not found", 404));
-                }
-                res.status(200).json({
-                    success: true,
-                    quiz,
-                });
-            }
-
-            return next(new ErrorHandler("Invalid type", 400));
-        } catch (error: any) {
-            return next(new ErrorHandler(error.message, 500));
-        }
-    }
-);
-
 export const startQuiz = CatchAsyncError(
     async (req: Request, res: Response, next: NextFunction) => {
         try {
@@ -179,29 +131,67 @@ export const startQuiz = CatchAsyncError(
                 const quizSubmission = await QuizSubmissionModel.findOne({
                     user_id: req.user?._id,
                     quiz_id: quiz._id,
-                });
+                })
 
                 if (quizSubmission) {
                     const isPretestPending = quizSubmission.pre_test_status === "PENDING"
+                    const isPretestCompleted = quizSubmission.pre_test_status === "COMPLETED"
+                    const lastPretest = quizSubmission.pre_test[quizSubmission.pre_test.length - 1]
                     if (isPretestPending) {
                         return res.status(200).json({
                             success: true,
-                            quiz
+                            quiz,
+                            submissionId: lastPretest._id.toString()
                         });
                     }
+
+                    if (isPretestCompleted && !quizSubmission.pre_test_passed) {
+                        console.log("xxx1");
+                        const newObjectId = new mongoose.Types.ObjectId();
+                        quizSubmission.pre_test.push({
+                            _id: newObjectId,
+                            score: 0,
+                            isPassed: false,
+                            start_date: new Date(),
+                            submit_date: new Date(),
+                            answerList: [],
+                        })
+        
+                        quizSubmission.pre_test_status = "PENDING";
+                        quizSubmission.status = "PENDING";
+        
+                        await quizSubmission.save()
+                        return res.status(200).json({
+                            success: true,
+                            quiz,
+                            submissionId: newObjectId.toString()
+                        });                                 
+                    }else{
+                        return next(new ErrorHandler("Pre-test already Passed", 400));
+                    }
                 } else {
-                    await QuizSubmissionModel.create({
+                    console.log("xxx2");
+                  const submission =  await QuizSubmissionModel.create({
                         user_id: req.user?._id,
                         quiz_id: quiz._id,
                         status: "PENDING",
-                        pre_test: [],
+                        pre_test: [
+                            {
+                                score: 0,
+                                isPassed: false,
+                                start_date: new Date(),
+                                answerList: [],
+                            }
+                        ],
                         post_test: [],
+                        pre_test_status: "PENDING",
                         pre_test_score: 0,
                         post_test_score: 0,
-                    });
+                    })
                     return res.status(200).json({
                         success: true,
                         quiz,
+                        submissionId: submission.pre_test[0]._id.toString()                 
                     });
                 }
             }
@@ -238,7 +228,7 @@ const checkAnswer = (userAnswer: any, questionList: any) => {
 export const submitQuiz = CatchAsyncError(
     async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const { course_id, type } = req.body;
+            const { course_id, type, submissionId } = req.body;
             const userCourseList = req.user?.courses;
             const { answers } = req.body;
             console.log("🚀 ~ answers:", answers)
@@ -270,35 +260,28 @@ export const submitQuiz = CatchAsyncError(
                     return next(new ErrorHandler("Quiz submission not found", 404));
                 }
 
-
-                console.log("🚀 ~ quizSubmission:", quizSubmission)
-
-                // await QuizSubmissionModel.create({
-                //     user_id: req.user?._id,
-                //     quiz_id: quiz._id,
-                //     status: "PENDING",
-                //     pre_test: [],
-                //     post_test: [],
-                //     pre_test_score: 0,
-                //     post_test_score: 0,
-                // });
                 const amountItemPassFromPercent = Math.floor((quiz.pass_percentage / 100) * quiz.quizItem.length)
                 const amountUserPercent = Math.floor((score / quiz.quizItem.length) * 100)
                 const isPass = score >= amountItemPassFromPercent
+                const indexPretest = quizSubmission.pre_test.findIndex((item: any) => item._id.toString() === submissionId)
+                const currentPretest = quizSubmission.pre_test[indexPretest]
+                console.log("🚀 ~ currentPretest:", currentPretest)
 
-                quizSubmission.pre_test.push({
+                quizSubmission.pre_test[indexPretest] = {
+                    ...currentPretest,
+                    start_date: currentPretest.start_date,
                     score,
                     isPassed: isPass,
                     submit_date: new Date(),
                     answerList: answers,
-                });
+                }
 
                 quizSubmission.pre_test_score = score;
                 quizSubmission.pre_test_passed = isPass;
                 quizSubmission.pre_test_status = "COMPLETED";
                 quizSubmission.status = "PENDING";
 
-                const result = quizSubmission.save()
+                const result = await quizSubmission.save()
 
                 res.status(200).json({
                     success: true,
@@ -310,6 +293,86 @@ export const submitQuiz = CatchAsyncError(
                         result: result
                     },
                 });
+            }
+
+            if (type === "post-test") {
+                const quiz = await QuizModel.findById(course?.quiz?.postTestId);
+                if (!quiz) {
+                    return next(new ErrorHandler("Quiz not found", 404));
+                }
+                res.status(200).json({
+                    success: true,
+                    quiz,
+                });
+            }
+        } catch (error: any) {
+            console.log("🚀 ~ error:", error)
+            return next(new ErrorHandler(error.message, 500));
+        }
+    }
+);
+
+
+export const getQuizStatus = CatchAsyncError(
+    async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const { course_id, type } = req.body;
+            const userCourseList = req.user?.courses;
+            const { answers } = req.body;
+            const courseExists = userCourseList?.find(
+                (course: any) => course._id.toString() === course_id
+            );
+
+            if (!courseExists) {
+                return next(
+                    new ErrorHandler("You are not eligible to access this course", 404)
+                );
+            }
+
+            const course = await CourseModel.findById(course_id).select("quiz");
+            if (type === "pre-test") {
+                const quiz = await QuizModel.findById(course?.quiz?.preTestId).select("-quizItem.answer");
+                if (!quiz) {
+                    return next(new ErrorHandler("Quiz not found", 404));
+                }
+
+                const quizSubmission = await QuizSubmissionModel.findOne({
+                    user_id: req.user?._id,
+                    quiz_id: quiz._id,
+                });
+
+                if (!quizSubmission) {
+                    return res.status(200).json({
+                        success: true,
+                        result: {
+                            stage: QUIZ_STAGE.NOT_STARTED
+                        }
+                    });
+                }
+
+                if (quizSubmission.pre_test_status === "PENDING") {
+                    const lastPretest = quizSubmission.pre_test[quizSubmission.pre_test.length - 1]
+
+                    return res.status(200).json({
+                        success: true,
+                        result: {
+                            stage: QUIZ_STAGE.PENDING,
+                            quiz,
+                            submissionId: lastPretest._id.toString()
+                        }
+                    });
+                }
+
+                if (quizSubmission.pre_test_status === "COMPLETED") {
+                    return res.status(200).json({
+                        success: true,
+                        result: {
+                            stage: QUIZ_STAGE.COMPLETED,
+                            quiz,
+                            quizSubmission,
+                        }
+                    });
+                }
             }
 
             if (type === "post-test") {

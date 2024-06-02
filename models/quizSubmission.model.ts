@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from 'mongoose';
+import { start } from 'repl';
 
 interface AnswerList {
   question_id: string;
@@ -11,8 +12,10 @@ const AnswerListSchema: Schema = new Schema({
 });
 
 interface Test {
+  _id: mongoose.Types.ObjectId;
   score: number;
   isPassed: boolean;
+  start_date: Date;
   submit_date: Date;
   answerList: AnswerList[];
 }
@@ -20,7 +23,8 @@ interface Test {
 const TestSchema: Schema = new Schema({
   score: { type: Number, required: true },
   isPassed: { type: Boolean, required: true },
-  submit_date: { type: Date, required: true },
+  submit_date: { type: Date },
+  start_date: { type: Date , required: true},
   answerList: { type: [AnswerListSchema], required: true },
 });
 
