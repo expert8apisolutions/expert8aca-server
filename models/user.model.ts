@@ -8,7 +8,6 @@ const emailRegexPattern: RegExp = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const courseSchema = new Schema({
   courseId: {
     type: mongoose.Schema.Types.ObjectId,
-    required: true
   },
   orderDate: {
     type: Date,

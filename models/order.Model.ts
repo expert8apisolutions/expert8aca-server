@@ -19,7 +19,6 @@ const orderSchema = new Schema<IOrder>({
     },
     referenceNo:{
         type: String,
-        required: true
     },
     payment_info:{
         type: Object,
