@@ -12,6 +12,7 @@ import {
   getAllCourses,
   getCourseByUser,
   getSingleCourse,
+  updateCourseToUser,
   uploadCourse,
 } from "../controllers/course.controller";
 import { authorizeRoles, isAutheticated } from "../middleware/auth";
@@ -25,6 +26,7 @@ courseRouter.post(
 );
 
 courseRouter.post("/add-course-user", isAutheticated, authorizeRoles("admin"), addCourseToUser);
+courseRouter.post("/update-course-user", isAutheticated, authorizeRoles("admin"), updateCourseToUser);
 
 courseRouter.put(
   "/edit-course/:id",

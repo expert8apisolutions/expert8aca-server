@@ -14,6 +14,7 @@ import ebookModel, { IEbook } from "../models/ebook.model";
 import { GbPrimepayService } from "../services/gbPrimepay.service";
 import { signTokenPayment, verifyTokenPayment } from "../utils/jwt";
 import axios from "axios";
+import dayjs from 'dayjs'
 require("dotenv").config();
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
@@ -134,7 +135,7 @@ export const createOrder = CatchAsyncError(
       const user = await userModel.findById(userId);
 
       const courseExistInUser = user?.courses.some(
-        (course: any) => course._id.toString() === courseId
+        (course: any) => course.courseId.toString() === courseId
       );
 
       if (courseExistInUser) {
@@ -190,7 +191,12 @@ export const createOrder = CatchAsyncError(
         return next(new ErrorHandler(error.message, 500));
       }
 
-      user?.courses.push(course?._id);
+      user?.courses.push({
+        courseId: course?._id,
+        orderDate: new Date(),
+        expireDate: dayjs().add(+(process.env.EXPIRE_DATE_DEFAULT_COURSE_IN_DAY as string),'day').toDate(),
+      });
+
 
       await redis.set(req.user?._id, JSON.stringify(user));
 
@@ -425,7 +431,7 @@ export const getPaymentCourse = CatchAsyncError(
       }
 
       const courseExistInUser = user?.courses.some(
-        (course: any) => course._id.toString() === courseId
+        (course: any) => course.courseId.toString() === courseId
       );
       if (courseExistInUser) {
         return next(
