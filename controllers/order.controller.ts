@@ -135,8 +135,7 @@ export const createOrder = CatchAsyncError(
       const user = await userModel.findById(userId);
 
       const courseExistInUser = user?.courses.some(
-        (course: any) => course.courseId.toString() === courseId
-      );
+        (course: any) => course.courseId?.toString() === courseId      );
 
       if (courseExistInUser) {
         return next(
@@ -431,8 +430,7 @@ export const getPaymentCourse = CatchAsyncError(
       }
 
       const courseExistInUser = user?.courses.some(
-        (course: any) => course.courseId.toString() === courseId
-      );
+        (course: any) => course.courseId?.toString() === courseId      );
       if (courseExistInUser) {
         return next(
           new ErrorHandler("You have already purchased this course", 400)
