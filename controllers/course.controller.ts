@@ -22,7 +22,7 @@ export const addCourseToUser = CatchAsyncError(
       const user = await userModel.findById(user_id);
 
       const courseExistInUser = user?.courses.some(
-        (course: any) => course._id.toString() === course_id
+        (course: any) => course.courseId.toString() === course_id
       );
 
       if (courseExistInUser) {

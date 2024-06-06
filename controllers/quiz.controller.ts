@@ -113,7 +113,7 @@ export const startQuiz = CatchAsyncError(
             console.log("🚀 ~ type:", type)
             const userCourseList = req.user?.courses;
             const courseExists = userCourseList?.find(
-                (course: any) => course._id.toString() === course_id
+                (course: any) => course.courseId.toString() === course_id
             );
 
             if (!courseExists) {
@@ -233,7 +233,7 @@ export const submitQuiz = CatchAsyncError(
             const { answers } = req.body;
             console.log("🚀 ~ answers:", answers)
             const courseExists = userCourseList?.find(
-                (course: any) => course._id.toString() === course_id
+                (course: any) => course.courseId.toString() === course_id
             );
 
             if (!courseExists) {
@@ -320,7 +320,7 @@ export const getQuizStatus = CatchAsyncError(
             const userCourseList = req.user?.courses;
             const { answers } = req.body;
             const courseExists = userCourseList?.find(
-                (course: any) => course._id.toString() === course_id
+                (course: any) => course.courseId.toString() === course_id
             );
 
             if (!courseExists) {
