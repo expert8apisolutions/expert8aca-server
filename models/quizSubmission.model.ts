@@ -8,7 +8,7 @@ interface AnswerList {
 
 const AnswerListSchema: Schema = new Schema({
   question_id: { type: String, required: true },
-  answer: { type: String, required: true },
+  answer: { type: String, required: false, default: null},
 });
 
 interface Test {
@@ -33,6 +33,7 @@ export type IStatus = "NOT_START" | "PENDING" | "COMPLETED";
 interface QuizSubmission extends Document {
   user_id: mongoose.Types.ObjectId;
   quiz_id: mongoose.Types.ObjectId;
+  course_id: mongoose.Types.ObjectId;
   pre_test: Test[];
   post_test: Test[];
   pre_test_score?: number;
@@ -47,6 +48,7 @@ interface QuizSubmission extends Document {
 const QuizSubmissionSchema: Schema = new Schema({
   user_id: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   quiz_id: { type: Schema.Types.ObjectId, ref: 'Quiz', required: true },
+  course_id: { type: Schema.Types.ObjectId, ref: 'Course', required: true },
   pre_test: { type: [TestSchema], required: true },
   post_test: { type: [TestSchema], required: true },
   pre_test_score: { type: Number, required: true },

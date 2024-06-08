@@ -161,6 +161,7 @@ const courseSchema = new Schema<ICourse>({
     preTestId: {
       type: mongoose.Types.ObjectId,
       ref: "Quiz",
+      required: false,
     },
     postTestEnabled: {
       type: Boolean,
@@ -172,6 +173,7 @@ const courseSchema = new Schema<ICourse>({
     postTestId: {
       type: mongoose.Types.ObjectId,
       ref: "Quiz",
+      required: false,
     },
   },
 }, { timestamps: true });

@@ -178,6 +178,15 @@ export const uploadCourse = CatchAsyncError(
           url: myCloud.secure_url,
         };
       }
+
+      if(!data.quiz.postTestEnabled){
+        delete data.quiz.postTestId
+      }
+
+      if(!data.quiz.preTestEnabled){
+        delete data.quiz.preTestId
+      }
+
       createCourse(data, res, next);
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 500));
@@ -247,9 +256,11 @@ export const getSingleCourse = CatchAsyncError(
       if(!course) {
         return next(new ErrorHandler("Course not found", 404));
       }
-
-     course.quiz.postTestId.total = course.quiz.postTestId.quizItem.length
-     course.quiz.postTestId.quizItem = undefined
+    
+      if(course.quiz.postTestId){
+        course.quiz.postTestId.total = course.quiz.postTestId.quizItem.length
+        course.quiz.postTestId.quizItem = undefined
+      }
 
       await redis.set(courseId, JSON.stringify(course), "EX", 604800); // 7days
 

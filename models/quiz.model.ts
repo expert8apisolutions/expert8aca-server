@@ -48,7 +48,7 @@ const QuizSchema: Schema = new Schema<IQuiz>({
     pass_percentage: { type: Number, required: true },
     max_submission_pre_test: { type: Number, required: true },
     max_submission_post_test: { type: Number, required: true },
-    time_limit_minutes: { type: Number, required: false },
+    time_limit_minutes: { type: Number, required: false, default: 0 },
     quizItem: { type: [QuizItemSchema], required: true },
     
 },{

@@ -131,6 +131,7 @@ export const startQuiz = CatchAsyncError(
                 const quizSubmission = await QuizSubmissionModel.findOne({
                     user_id: req.user?._id,
                     quiz_id: quiz._id,
+                    course_id: course?._id,
                 })
 
                 if (quizSubmission) {
@@ -164,16 +165,17 @@ export const startQuiz = CatchAsyncError(
                         return res.status(200).json({
                             success: true,
                             quiz,
-                            submissionId: newObjectId.toString()
+                            submissionId: newObjectId.toString(),
+                            quizSubmission,
                         });                                 
                     }else{
                         return next(new ErrorHandler("Pre-test already Passed", 400));
                     }
                 } else {
-                    console.log("xxx2");
-                  const submission =  await QuizSubmissionModel.create({
+                  const quizSubmission =  await QuizSubmissionModel.create({
                         user_id: req.user?._id,
                         quiz_id: quiz._id,
+                        course_id: course?._id,
                         status: "PENDING",
                         pre_test: [
                             {
@@ -191,7 +193,8 @@ export const startQuiz = CatchAsyncError(
                     return res.status(200).json({
                         success: true,
                         quiz,
-                        submissionId: submission.pre_test[0]._id.toString()                 
+                        submissionId: quizSubmission.pre_test[0]._id.toString(),
+                        quizSubmission,
                     });
                 }
             }
@@ -254,6 +257,7 @@ export const submitQuiz = CatchAsyncError(
                 const quizSubmission = await QuizSubmissionModel.findOne({
                     user_id: req.user?._id,
                     quiz_id: quiz._id,
+                    course_id: course?._id,
                 });
 
                 if (!quizSubmission) {
@@ -339,13 +343,15 @@ export const getQuizStatus = CatchAsyncError(
                 const quizSubmission = await QuizSubmissionModel.findOne({
                     user_id: req.user?._id,
                     quiz_id: quiz._id,
+                    course_id: course?._id,
                 });
 
                 if (!quizSubmission) {
                     return res.status(200).json({
                         success: true,
                         result: {
-                            stage: QUIZ_STAGE.NOT_STARTED
+                            stage: QUIZ_STAGE.NOT_STARTED,
+                            quiz,
                         }
                     });
                 }
@@ -358,7 +364,8 @@ export const getQuizStatus = CatchAsyncError(
                         result: {
                             stage: QUIZ_STAGE.PENDING,
                             quiz,
-                            submissionId: lastPretest._id.toString()
+                            submissionId: lastPretest._id.toString(),
+                            quizSubmission,
                         }
                     });
                 }
