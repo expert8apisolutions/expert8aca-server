@@ -6,6 +6,7 @@ import {
   getAllOrders,
   newPayment,
   sendTokenPayment,
+  verifySlip,
 } from "../controllers/order.controller";
 const orderRouter = express.Router();
 
@@ -22,5 +23,7 @@ orderRouter.get(
 orderRouter.post("/payment/token", isAutheticated, sendTokenPayment);
 
 orderRouter.post("/payment", isAutheticated, newPayment);
+
+orderRouter.post("/verify-slip", isAutheticated, verifySlip);
 
 export default orderRouter;

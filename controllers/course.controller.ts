@@ -41,6 +41,7 @@ export const addCourseToUser = CatchAsyncError(
         courseId: course._id,
         userId: user?._id,
         payment_info: {},
+        referenceNo: (Math.floor(Date.now() / 10)) + '-force',
       };
 
       const mailData = {
