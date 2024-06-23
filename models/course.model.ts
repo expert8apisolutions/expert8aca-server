@@ -32,6 +32,15 @@ interface ICourseData extends Document {
   questions: IComment[];
 }
 
+interface IQuiz extends Document {
+  preTestEnabled?: boolean;
+  preTestTitle?: string;
+  preTestId?: mongoose.Types.ObjectId;
+  postTestEnabled?: boolean;
+  postTestTitle?: string;
+  postTestId?: mongoose.Types.ObjectId;
+}
+
  export interface ICourse extends Document {
   name: string;
   description: string;
@@ -49,7 +58,7 @@ interface ICourseData extends Document {
   ratings?: number;
   purchased: number;
   status: string;
-
+  quiz?: IQuiz;
 }
 
 const reviewSchema = new Schema<IReview>({
@@ -140,8 +149,34 @@ const courseSchema = new Schema<ICourse>({
    purchased:{
     type: Number,
     default: 0,
-   },
-},{timestamps: true});
+  },
+  quiz: {
+    preTestEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    preTestTitle: {
+      type: String,
+    },
+    preTestId: {
+      type: mongoose.Types.ObjectId,
+      ref: "Quiz",
+      required: false,
+    },
+    postTestEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    postTestTitle: {
+      type: String,
+    },
+    postTestId: {
+      type: mongoose.Types.ObjectId,
+      ref: "Quiz",
+      required: false,
+    },
+  },
+}, { timestamps: true });
 
 
 const CourseModel: Model<ICourse> = mongoose.model("Course", courseSchema);

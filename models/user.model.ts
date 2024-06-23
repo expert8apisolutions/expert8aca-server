@@ -5,6 +5,21 @@ import jwt from "jsonwebtoken";
 
 const emailRegexPattern: RegExp = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+const courseSchema = new Schema({
+  courseId: {
+    type: mongoose.Schema.Types.ObjectId,
+  },
+  orderDate: {
+    type: Date,
+    default: Date.now,
+  },
+  expireDate: {
+    type: Date,
+  }
+});
+
+
+
 export interface IUser extends Document {
   name: string;
   email: string;
@@ -15,7 +30,7 @@ export interface IUser extends Document {
   };
   role: string;
   isVerified: boolean;
-  courses: Array<{ courseId: string }>;
+  courses: Array<{ courseId: string, orderDate: Date, expireDate: Date }>;
   ebooks: Array<{ ebookId: string }>;
   comparePassword: (password: string) => Promise<boolean>;
   SignAccessToken: () => string;
@@ -56,11 +71,7 @@ const userSchema: Schema<IUser> = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    courses: [
-      {
-        courseId: String,
-      },
-    ],
+    courses: [courseSchema],
     ebooks: [
       {
         ebookId: String,

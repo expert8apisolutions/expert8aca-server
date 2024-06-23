@@ -11,18 +11,18 @@ import ejs from "ejs";
 import sendMail from "../utils/sendMail";
 import NotificationModel from "../models/notification.Model";
 import axios from "axios";
-import userModel from "../models/user.model";
+import userModel, { IUser } from "../models/user.model";
 import { newOrder } from "../services/order.service";
 
 export const addCourseToUser = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { user_id, course_id } = req.body;
+      const { user_id, course_id, expireDate } = req.body
 
       const user = await userModel.findById(user_id);
 
       const courseExistInUser = user?.courses.some(
-        (course: any) => course._id.toString() === course_id
+        (course: any) => course?.courseId?.toString() === course_id
       );
 
       if (courseExistInUser) {
@@ -41,6 +41,7 @@ export const addCourseToUser = CatchAsyncError(
         courseId: course._id,
         userId: user?._id,
         payment_info: {},
+        referenceNo: (Math.floor(Date.now() / 10)) + '-force',
       };
 
       const mailData = {
@@ -63,7 +64,7 @@ export const addCourseToUser = CatchAsyncError(
 
       try {
         if (user) {
-          await sendMail({
+          sendMail({
             email: user.email,
             subject: "Order Confirmation",
             template: "order-confirmation.ejs",
@@ -71,16 +72,21 @@ export const addCourseToUser = CatchAsyncError(
           });
         }
       } catch (error: any) {
-        return next(new ErrorHandler(error.message, 500));
+        console.log("🚀 ~ error:", error)
+        // return next(new ErrorHandler(error.message, 500));
       }
 
-      user?.courses.push(course?._id);
+      user?.courses.push({
+        courseId: course?._id,
+        orderDate: new Date(),
+        expireDate: expireDate,
+      });
 
       await redis.set(user_id, JSON.stringify(user));
 
       await user?.save();
 
-      await NotificationModel.create({
+      NotificationModel.create({
         user: user?._id,
         title: "New Order",
         message: `You have a new order from ${course?.name}`,
@@ -96,6 +102,66 @@ export const addCourseToUser = CatchAsyncError(
     }
   }
 );
+
+export const updateCourseToUser = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try{
+      const { user_id, course_id, expireDate } = req.body
+
+      const user: IUser | null = await userModel.findById(user_id);
+
+      const courseExistInUser = user?.courses.some(
+        (course: any) => course?.courseId?.toString() === course_id
+      );
+
+      if (!courseExistInUser) {
+        return next(
+          new ErrorHandler("Course Not Exits In User", 400)
+        );
+      }
+
+      const course:ICourse | null = await CourseModel.findById(course_id);
+
+      if (!course) {
+        return next(new ErrorHandler("Course not found", 404));
+      }
+
+      const newCourse: any = user?.courses.map(ele => {
+
+        if(ele.courseId.toString() === course_id){
+          return ({
+            ...ele,
+            expireDate
+          })
+        }
+
+        return ({
+          ...ele
+        })
+      })
+      
+
+      if(user){
+        user.courses = newCourse
+      }
+
+      await redis.set(user_id, JSON.stringify(user));
+
+      await user?.save();
+
+      res.status(201).json({
+        success: true,
+        user,
+      });
+
+    }catch(error: any){
+      console.log("🚀 ~ file: course.controller.ts:156 ~ error:", error)
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }
+)
+
+
 
 // upload course
 export const uploadCourse = CatchAsyncError(
@@ -113,6 +179,15 @@ export const uploadCourse = CatchAsyncError(
           url: myCloud.secure_url,
         };
       }
+
+      if(!data.quiz.postTestEnabled){
+        delete data.quiz.postTestId
+      }
+
+      if(!data.quiz.preTestEnabled){
+        delete data.quiz.preTestId
+      }
+
       createCourse(data, res, next);
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 500));
@@ -175,14 +250,18 @@ export const getSingleCourse = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const courseId = req.params.id;
-      const course: any = await CourseModel.findOne({ _id: req.params.id, status: 'Public' }).select(
-        "-courseData.videoUrl -courseData.suggestion -courseData.questions -courseData.links"
+      let course: any = await CourseModel.findOne({ _id: req.params.id, status: 'Public' }).populate('quiz.postTestId').select(
+        "-courseData.videoUrl -courseData.suggestion -courseData.questions -courseData.links -quiz.postTestId.quizItem"
       );
 
       if(!course) {
         return next(new ErrorHandler("Course not found", 404));
       }
-
+    
+      if(course.quiz.postTestId){
+        course.quiz.postTestId.total = course.quiz.postTestId.quizItem.length
+        course.quiz.postTestId.quizItem = undefined
+      }
 
       await redis.set(courseId, JSON.stringify(course), "EX", 604800); // 7days
 
@@ -245,7 +324,7 @@ export const getCourseByUser = CatchAsyncError(
       const courseId = req.params.id;
 
       const courseExists = userCourseList?.find(
-        (course: any) => course._id.toString() === courseId
+        (course: any) => course.courseId?.toString() === courseId
       );
 
       if (!courseExists) {
@@ -427,7 +506,7 @@ export const addReview = CatchAsyncError(
 
       // check if courseId already exists in userCourseList based on _id
       const courseExists = userCourseList?.some(
-        (course: any) => course._id.toString() === courseId.toString()
+        (course: any) => course.courseId.toString() === courseId.toString()
       );
 
       if (!courseExists) {

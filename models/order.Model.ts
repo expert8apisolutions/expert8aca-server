@@ -6,6 +6,13 @@ export interface IOrder extends Document{
     userId?:string;
     referenceNo?:string;
     payment_info: object;
+    addressInfo?: IAddressInfo;
+}
+
+export interface IAddressInfo extends Document{
+    fullname: string;
+    phone:string;
+    address:string;
 }
 
 const orderSchema = new Schema<IOrder>({
@@ -25,6 +32,11 @@ const orderSchema = new Schema<IOrder>({
         type: Object,
         // required: true
     },
+    addressInfo: {
+        fullname: {type: String, },
+        phone: {type: String, },
+        address: {type: String, },
+    }
 },{timestamps: true});
 
 const OrderModel: Model<IOrder> = mongoose.model('Order',orderSchema);

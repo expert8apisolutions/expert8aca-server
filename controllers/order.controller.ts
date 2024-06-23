@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import { CatchAsyncError } from "../middleware/catchAsyncErrors";
 import ErrorHandler from "../utils/ErrorHandler";
-import OrderModel, { IOrder } from "../models/order.Model";
+import OrderModel, { IAddressInfo, IOrder } from "../models/order.Model";
 import userModel from "../models/user.model";
 import CourseModel, { ICourse } from "../models/course.model";
 import path from "path";
@@ -14,10 +14,14 @@ import ebookModel, { IEbook } from "../models/ebook.model";
 import { GbPrimepayService } from "../services/gbPrimepay.service";
 import { signTokenPayment, verifyTokenPayment } from "../utils/jwt";
 import axios from "axios";
+import dayjs from 'dayjs'
+import { CheckSlipService } from "../services/checkSlip.service";
+import OrderEbookModel from "../models/orderEbook.model";
 require("dotenv").config();
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 const gbPrimepayService = new GbPrimepayService();
+const checkSlipApi = new CheckSlipService();
 
 
 const BASE_URL_PAYMENT_ORDER_DETAIL = 'https://apis.paysolutions.asia/order/orderdetailpost'
@@ -134,8 +138,7 @@ export const createOrder = CatchAsyncError(
       const user = await userModel.findById(userId);
 
       const courseExistInUser = user?.courses.some(
-        (course: any) => course._id.toString() === courseId
-      );
+        (course: any) => course.courseId?.toString() === courseId);
 
       if (courseExistInUser) {
         return next(
@@ -190,7 +193,12 @@ export const createOrder = CatchAsyncError(
         return next(new ErrorHandler(error.message, 500));
       }
 
-      user?.courses.push(course?._id);
+      user?.courses.push({
+        courseId: course?._id,
+        orderDate: new Date(),
+        expireDate: dayjs().add(+(process.env.EXPIRE_DATE_DEFAULT_COURSE_IN_DAY as string), 'day').toDate(),
+      });
+
 
       await redis.set(req.user?._id, JSON.stringify(user));
 
@@ -425,8 +433,7 @@ export const getPaymentCourse = CatchAsyncError(
       }
 
       const courseExistInUser = user?.courses.some(
-        (course: any) => course._id.toString() === courseId
-      );
+        (course: any) => course.courseId?.toString() === courseId);
       if (courseExistInUser) {
         return next(
           new ErrorHandler("You have already purchased this course", 400)
@@ -462,12 +469,14 @@ interface ICreateOrderCourse {
   userId: string;
   referenceNo: string;
   paymentInfo: any;
+  addressInfo?: IAddressInfo;
 }
 const createOrderCourse = async ({
   courseId,
   userId,
   referenceNo,
   paymentInfo,
+  addressInfo,
 }: ICreateOrderCourse) => {
 
   const user = await userModel.findById(userId);
@@ -503,7 +512,11 @@ const createOrderCourse = async ({
     throw new Error(error.message);
   }
 
-  user?.courses.push(course?._id);
+  user?.courses.push({
+    courseId: course?._id,
+    orderDate: new Date(),
+    expireDate: dayjs().add(+(process.env.EXPIRE_DATE_DEFAULT_COURSE_IN_DAY as string), 'day').toDate(),
+  });
 
   redis.set(userId, JSON.stringify(user));
 
@@ -523,11 +536,13 @@ const createOrderCourse = async ({
     userId: user?._id,
     referenceNo: referenceNo,
     payment_info: paymentInfo,
+    addressInfo,
   };
 
   const result = await OrderModel.create(data)
   return result
 }
+
 
 export const sendTokenPayment = CatchAsyncError(
   async (req: Request, res: Response) => {
@@ -579,6 +594,224 @@ export const webhookOrder = CatchAsyncError(
       }
     } catch (error: any) {
       console.log("🚀 ~ file: order.controller.ts:155 ~ error:", error)
+      return next(new ErrorHandler(error.message, 500));
+    }
+  }
+);
+
+interface ICreateOrderEbookSlip {
+  ebookId: string;
+  userId: string;
+  referenceNo: string;
+  paymentInfo: any;
+}
+
+const createOrderEbookSlip = async ({
+  ebookId,
+  userId,
+  referenceNo,
+  paymentInfo,
+}: ICreateOrderEbookSlip) => {
+  try {
+
+    const user = await userModel.findById(userId);
+    const ebook: IEbook | null = await ebookModel.findById(ebookId);
+
+    if (!ebook) {
+      throw new Error("Ebook not found");
+    }
+
+    const mailData = {
+      order: {
+        _id: referenceNo,
+        name: ebook?.name,
+        price: ebook?.price,
+        date: new Date().toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }),
+      },
+    };
+
+    try {
+      if (user) {
+        await sendMail({
+          email: user.email,
+          subject: "Order Confirmation",
+          template: "order-confirmation.ejs",
+          data: mailData,
+        });
+      }
+    } catch (error: any) {
+      console.log("🚀 ~ createOrderEbookSlip error:", error)
+    }
+
+    user?.ebooks.push(ebook?._id);
+
+    await redis.set(userId, JSON.stringify(user));
+
+    await user?.save();
+
+    NotificationModel.create({
+      user: user?._id,
+      title: "New Order",
+      message: `You have a new order from ${ebook?.name}`,
+    });
+
+    ebook.purchased = ebook.purchased + 1;
+
+    await ebook.save();
+
+    const data: any = {
+      ebookId,
+      userId,
+      payment_info: paymentInfo ?? {},
+      referenceNo,
+    };
+
+    const resultOrder = await OrderEbookModel.create(data)
+    return {
+      ebookId: resultOrder.ebookId,
+      referenceNo: resultOrder.referenceNo,
+    }
+  } catch (error: any) {
+    throw new Error(error.message);
+  }
+}
+
+const checkName = (displayName: string) => {
+  return displayName?.includes(process.env.BANK_ACCOUNT_NAME_EN + '') || displayName?.includes(process.env.BANK_ACCOUNT_NAME_TH + '')
+}
+
+const getBankNoNumber = (bankNoPattern: string) => {
+  if (!bankNoPattern) return 'not-match-bank-no'
+  return bankNoPattern?.replace?.(/\D/g, '')
+
+}
+
+const checkBankNo = (receiver: any) => {
+  const isBankAccount = process.env.BANK_ACCOUNT_NO?.includes(getBankNoNumber(receiver?.account?.value || ''))
+  const isBankProxy = process.env.BANK_ACCOUNT_NO?.includes(getBankNoNumber(receiver?.proxy?.value || ''))
+  return isBankAccount || isBankProxy
+}
+
+const checkDuplicateOrder = async (transRef: string, productType: string) => {
+  let order = []
+
+  if (productType === ProductType.COURSE) {
+    order = await OrderModel.find({ referenceNo: transRef })
+  }
+  else if (productType === ProductType.EBOOK) {
+    order = await OrderEbookModel.find({ referenceNo: transRef })
+  }
+
+  if (order.length > 0) {
+    return 'สลิปนี้ถูกใช้แล้ว'
+  }
+  return false
+}
+
+
+const checkSlip = async (qrData: any, product: ICourse | IEbook, productType: string) => {
+  const dataSlip = await checkSlipApi.inquiry(qrData)
+  if (dataSlip) {
+    console.debug('checkSlip result: =>', {
+      receiver: dataSlip?.data?.receiver,
+      data: dataSlip?.data,
+    })
+    const isChecked = await checkDuplicateOrder(dataSlip?.data?.transRef, productType)
+    if (isChecked) {
+      throw new Error(isChecked)
+    }
+    const isCorrectName = checkName(dataSlip?.data?.receiver?.displayName)
+    const isCorrectBackNo = checkBankNo(dataSlip?.data?.receiver)
+    const isCorrectAmount = dataSlip?.data?.amount == product?.price
+
+    if (!isCorrectBackNo) {
+      throw new Error('เลขบัญชีไม่ถูกต้อง')
+    }
+
+    if (!isCorrectName) {
+      throw new Error('ชื่อผู้รับเงินไม่ถูกต้อง')
+    }
+
+    if (!isCorrectAmount) {
+      throw new Error(`จำนวนเงินไม่ถูกต้อง`)
+    }
+    return dataSlip
+  } else {
+    throw new Error('ไม่พสลิป')
+  }
+}
+
+export const verifySlip = CatchAsyncError(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { productType, productId, qrData, addressInfo } = req.body
+      const userId = req.user?._id
+
+      if (!productType || !productId || !qrData) {
+        return next(new ErrorHandler('productType, productId, qrData is required', 500));
+      }
+
+      if (productType === ProductType.COURSE) {
+        const [product, user] = await Promise.all([
+          CourseModel.findById(productId),
+          userModel.findById(userId)
+        ])
+        if (!product) {
+          return next(new ErrorHandler('Course not found', 500));
+        }
+
+        const courseExistInUser = user?.courses.some(
+          (course: any) => course._id.toString() === productId
+        );
+
+        if (courseExistInUser) {
+          return next(
+            new ErrorHandler("You have already purchased this course", 400)
+          );
+        }
+
+        const resultSlip = await checkSlip(qrData, product, ProductType.COURSE)
+        const result = await createOrderCourse({ courseId: productId, userId, referenceNo: resultSlip.data.transRef, paymentInfo: resultSlip, addressInfo })
+        res.status(200).json({
+          success: true,
+          result,
+        });
+      }
+      else if (productType === ProductType.EBOOK) {
+        const [product, user] = await Promise.all([
+          ebookModel.findById(productId),
+          userModel.findById(userId)
+        ])
+
+        if (!product) {
+          return next(new ErrorHandler('Ebook not found', 500));
+        }
+
+        const ebookExistInUser = user?.ebooks.some(
+          (ebook: any) => ebook._id.toString() === productId
+        );
+
+        if (ebookExistInUser) {
+          return next(
+            new ErrorHandler("You have already purchased this ebook", 400)
+          );
+        }
+
+        const resultSlip = await checkSlip(qrData, product, ProductType.EBOOK)
+        const result = await createOrderEbookSlip({ ebookId: productId, userId, referenceNo: resultSlip.data.transRef, paymentInfo: resultSlip })
+        console.log("🚀 ~ result:", result)
+        res.status(200).json({
+          success: true,
+          result,
+        });
+      } else {
+        return next(new ErrorHandler('productType not found', 500));
+      }
+    } catch (error: any) {
       return next(new ErrorHandler(error.message, 500));
     }
   }
