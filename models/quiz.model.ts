@@ -24,6 +24,7 @@ export interface IQuiz extends Document {
     max_submission_post_test: number;
     time_limit_minutes: number | null;
     quizItem: QuizItem[];
+    total_questions: number;
 }
 
 const ChoiceSchema: Schema = new Schema({
@@ -50,6 +51,7 @@ const QuizSchema: Schema = new Schema<IQuiz>({
     max_submission_post_test: { type: Number, required: true },
     time_limit_minutes: { type: Number, required: false, default: 0 },
     quizItem: { type: [QuizItemSchema], required: true },
+    total_questions: { type: Number, required: true, default: 0 },
     
 },{
     timestamps: true,
