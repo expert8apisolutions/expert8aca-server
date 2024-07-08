@@ -698,3 +698,95 @@ export const getQuizReport = CatchAsyncError(
         }
     }
 );
+
+export const getQuizReportByDate = CatchAsyncError(
+    async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const { quiz_id, start_date, end_date } = req.query
+            const quiz = await QuizSubmissionModel.aggregate([
+                {
+                    $match: {
+                        quiz_id: new mongoose.Types.ObjectId(quiz_id as string)
+                    }
+                },
+                {
+                    $lookup: {
+                        from: "users",
+                        localField: "user_id",
+                        foreignField: "_id",
+                        as: "user"
+                    }
+                },
+                {
+                    $lookup: {
+                        from: "quizzes",
+                        localField: "quiz_id",
+                        foreignField: "_id",
+                        as: "quiz"
+                    }
+                },
+                {
+                    $lookup: {
+                        from: "courses",
+                        localField: "course_id",
+                        foreignField: "_id",
+                        as: "course"
+                    }
+                },
+                {
+                    $project: {
+                        _id: 1,
+                        "user.name": 1,
+                        pre_test_score: 1,
+                        post_test_score: 1,
+                        pre_test_passed: 1,
+                        post_test_passed: 1,
+                        pre_test_status: 1,
+                        post_test_status: 1,
+                        status: 1,
+                        pre_test_count: { $size: "$pre_test" },
+                        post_test_count: { $size: "$post_test" },
+                        pre_test_last_submit_date: { $last: "$pre_test.submit_date" },
+                        post_test_last_submit_date: { $last: "$post_test.submit_date" },
+                    }
+                },
+                {
+                    $match: {
+                        $or: [
+                            { pre_test_last_submit_date: { $gte: new Date(start_date as string), $lte: new Date(end_date as string) } },
+                            { post_test_last_submit_date: { $gte: new Date(start_date as string), $lte: new Date(end_date as string) } }
+                        ]
+                    }
+                }
+            ]);
+            res.status(200).json({
+                success: true,
+                result: quiz,
+            });
+        } catch (error: any) {
+            return next(new ErrorHandler(error.message, 500));
+        }
+    }
+);
+
+export const getQuizInfo = CatchAsyncError(
+    async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const { quiz_id, course_id } = req.params;
+            if(!quiz_id || !course_id) {
+                return next(new ErrorHandler("Invalid quiz_id or course_id", 400));
+            }
+            const quiz = await QuizSubmissionModel.findOne({
+                quiz_id: new mongoose.Types.ObjectId(quiz_id as string),
+                user_id: new mongoose.Types.ObjectId(req.user?._id as string),
+                course_id: new mongoose.Types.ObjectId(course_id),
+            }).select("pre_test_passed")
+            res.status(200).json({
+                success: true,
+                result: quiz,
+            });
+        } catch (error: any) {
+            return next(new ErrorHandler(error.message, 500));
+        }
+    }
+);
