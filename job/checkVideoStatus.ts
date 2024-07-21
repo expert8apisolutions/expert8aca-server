@@ -2,12 +2,15 @@ import mongoose from "mongoose";
 import FileModel, { IFile } from "../models/file.model";
 import axios from "axios";
 import { headerApiKey } from "../utils/headerApi";
+import { VIMEO_STATUS, VimeoService } from "../services/vimeoApi.service";
+
+const vimeApi = new VimeoService()
 
 export const checkVideoReady = async (assetId: string) => {
-    const result = await axios.get(`${process.env.CORE_API_UPLOAD_URL}/detail-video/${assetId}`, { headers: headerApiKey });
-    return {
-        percent: result.data.percent || 0,
-    }
+    const transcodeStatus = await vimeApi.getTranscodeStatus(assetId)
+        .catch((error) => {
+        })
+    return transcodeStatus || VIMEO_STATUS.IN_PROGRESS;
 }
 
 export const jobCheckVideoStatus = async () => {
@@ -21,10 +24,9 @@ export const jobCheckVideoStatus = async () => {
         if (fileNotHavePlaybackId.length > 0) {
             fileNotHavePlaybackId.forEach(async (file) => {
                 if (file.assetId && (file.status === "preparing")) {
-                    const percent = await checkVideoReady(file.assetId);
+                    const videoStatus = await checkVideoReady(file.assetId);
                     await FileModel.findByIdAndUpdate(file._id, {
-                        status: percent.percent === 100 ? "ready" : "preparing",
-                        percent: percent.percent || 0,
+                        status: videoStatus === VIMEO_STATUS.COMPLETE ? "ready" : "preparing",
                     });
                 }
             })

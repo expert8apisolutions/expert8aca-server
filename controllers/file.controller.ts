@@ -6,16 +6,15 @@ import FileModel from "../models/file.model";
 import axios from "axios";
 import { headerApiKey } from "../utils/headerApi";
 import { checkVideoReady } from "../job/checkVideoStatus";
+import { VimeoService } from "../services/vimeoApi.service";
 
 const LIMIT_STORAGE_IN_GB = +(process?.env?.LIMIT_STORAGE_IN_GB ?? 5);
 const LABEL_ID = process?.env?.STREAM_LABEL_ID;
+const vimeApi = new VimeoService();
 
 const deleteAssetResource = async (assetId: string, awsId: string) => {
     try {
-        const result = await axios.post(`${process.env.CORE_API_UPLOAD_URL}/delete-asset`, {
-            assetId,
-            awsId,
-        }, { headers: headerApiKey });
+        const result = await vimeApi.deleteVideo(assetId);
         return result;
     } catch (error) {
         console.error("Error during delete asset:", error);
@@ -27,7 +26,7 @@ const findAndDeleteFile = async (fileId: string) => {
     if (!file) {
         return;
     }
-    if (file.assetId && file.awsId) {
+    if (file.assetId) {
         deleteAssetResource(file.assetId, file.awsId);
     }
     await FileModel.findByIdAndDelete(fileId);
@@ -176,7 +175,7 @@ export const addFile = CatchAsyncError(
             const { name, sizeInMB, format, parentId, assetId, playbackId, status, awsId } =
                 req.body;
 
-            const [checkLimit, checkPercent] = await Promise.all([getSumSizeAllFile(), checkVideoReady(assetId)])
+            const [checkLimit] = await Promise.all([getSumSizeAllFile()])
             if (checkLimit + sizeInMB > LIMIT_STORAGE_IN_GB * 1000) {
                 return next(
                     new ErrorHandler(
@@ -198,8 +197,8 @@ export const addFile = CatchAsyncError(
                     parentId,
                     assetId,
                     playbackId,
-                    status,
-                    percent: checkPercent.percent || 0,
+                    status: 'preparing',
+                    percent: 100,
                     awsId,
                 };
                 const result = await FileModel.create(file);
@@ -219,8 +218,8 @@ export const addFile = CatchAsyncError(
                     parentId: null,
                     assetId,
                     playbackId,
-                    status,
-                    percent: checkPercent.percent || 0,
+                    status: 'preparing',
+                    percent: 100,
                     awsId
                 };
                 const result = await FileModel.create(file);
@@ -299,25 +298,6 @@ export const getFolderAndFile = CatchAsyncError(
     }
 );
 
-export const deleteFileInFolder = CatchAsyncError(
-    async (req: Request, res: Response, next: NextFunction) => {
-        try {
-            const fileId = req.params.id;
-            const file = await FileModel.findById(fileId);
-            if (!file) {
-                return next(new ErrorHandler("File not found", 404));
-            }
-            await file.deleteOne({ id: fileId });
-            findAndDeleteFile(fileId);
-            res.status(200).json({
-                success: true,
-                message: "File deleted successfully",
-            });
-        } catch (error: any) {
-            return next(new ErrorHandler(error.message, 400));
-        }
-    }
-);
 
 export const editFile = CatchAsyncError(
     async (req: Request, res: Response, next: NextFunction) => {
@@ -372,7 +352,7 @@ export const deleteFile = CatchAsyncError(
             if (!file) {
                 return next(new ErrorHandler("File not found", 404));
             }
-            await FileModel.findByIdAndDelete(fileId);
+            // await FileModel.findByIdAndDelete(fileId);
             findAndDeleteFile(fileId);
             res.status(200).json({
                 success: true,
@@ -380,6 +360,92 @@ export const deleteFile = CatchAsyncError(
             });
         } catch (error: any) {
             return next(new ErrorHandler(error.message, 400));
+        }
+    }
+);
+
+export const getLinkUploadVimeo = CatchAsyncError(
+    async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const { name, size } = req.body;
+
+            const response = await axios({
+                method: 'POST',
+                url: 'https://api.vimeo.com/me/videos',
+                headers: {
+                    Authorization: `Bearer ${process.env.VIMEO_ACCESS_TOKEN}`,
+                    'Content-Type': 'application/json'
+                },
+                data: {
+                    upload: {
+                        approach: 'tus',
+                        size: size,
+                    },
+                    name: name,
+                }
+            });
+            const linkUpload = response.data.upload.upload_link;
+            const linkVideo = response.data.player_embed_url;
+            const videoId = response.data.uri?.replace('/videos/', '')
+            const folderId = process.env.VIMEO_FOLDER_ID;
+            if (folderId && videoId) {
+                await axios({
+                    method: 'PUT',
+                    url: `https://api.vimeo.com/me/projects/${folderId}/videos/${videoId}`,
+                    headers: {
+                        Authorization: `Bearer ${process.env.VIMEO_ACCESS_TOKEN}`,
+                        'Content-Type': 'application/json'
+                    }
+                }).then((response) => {
+                    console.log("🚀 ~ move folder:", response.data);
+                })
+            }
+
+            res.status(200).json({
+                success: true,
+                upload_link: linkUpload,
+                link: linkVideo,
+                videoId,
+                data: response.data
+            });
+        } catch (error: any) {
+            console.log("🚀 ~ error:", error)
+            return next(new ErrorHandler(error.message, 500));
+        }
+    }
+);
+
+export const getVideoTranscodeStatus = CatchAsyncError(
+    async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const { videoId } = req.params;
+
+            // Ensure videoId is provided
+            if (!videoId) {
+                return next(new ErrorHandler('Video ID is required', 400));
+            }
+
+            // Make the API request to Vimeo
+            const response = await axios({
+                method: 'GET',
+                url: `https://api.vimeo.com/videos/${videoId}`,
+                headers: {
+                    Authorization: `Bearer ${process.env.VIMEO_ACCESS_TOKEN}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            // Extract the transcode status from the response
+            const transcodeStatus = response.data.transcode.status;
+
+            // Send the transcode status in the response
+            res.status(200).json({
+                success: true,
+                transcode_status: transcodeStatus,
+            });
+        } catch (error: any) {
+            // Pass any errors to the error handler
+            return next(new ErrorHandler(error.message, 500));
         }
     }
 );

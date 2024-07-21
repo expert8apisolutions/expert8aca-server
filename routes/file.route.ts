@@ -1,6 +1,6 @@
 import express from "express";
 import { authorizeRoles, isAutheticated } from "../middleware/auth";
-import { addFile, createFolder, deleteFile, deleteFolder, editFile, editFolder, getFolderAndFile, getSingleFolder, updatePlayBackId } from "../controllers/file.controller";
+import { addFile, createFolder, deleteFile, deleteFolder, editFile, editFolder, getFolderAndFile, getLinkUploadVimeo, getSingleFolder, getVideoTranscodeStatus, updatePlayBackId } from "../controllers/file.controller";
 
 const fileRouter = express.Router();
 
@@ -61,5 +61,19 @@ fileRouter.post(
     isAutheticated, 
     authorizeRoles("admin"),
     updatePlayBackId,
+);
+
+fileRouter.post(
+    "/file/get-link-upload",
+    // isAutheticated, 
+    // authorizeRoles("admin"),
+    getLinkUploadVimeo,
+);
+
+fileRouter.get(
+    "/file/transcode-status/:videoId",
+    // isAutheticated, 
+    // authorizeRoles("admin"),
+    getVideoTranscodeStatus,
 );
 export default fileRouter;
