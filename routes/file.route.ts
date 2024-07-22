@@ -65,15 +65,8 @@ fileRouter.post(
 
 fileRouter.post(
     "/file/get-link-upload",
-    // isAutheticated, 
-    // authorizeRoles("admin"),
+    isAutheticated, 
+    authorizeRoles("admin"),
     getLinkUploadVimeo,
-);
-
-fileRouter.get(
-    "/file/transcode-status/:videoId",
-    // isAutheticated, 
-    // authorizeRoles("admin"),
-    getVideoTranscodeStatus,
 );
 export default fileRouter;

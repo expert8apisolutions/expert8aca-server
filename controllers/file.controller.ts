@@ -414,38 +414,3 @@ export const getLinkUploadVimeo = CatchAsyncError(
         }
     }
 );
-
-export const getVideoTranscodeStatus = CatchAsyncError(
-    async (req: Request, res: Response, next: NextFunction) => {
-        try {
-            const { videoId } = req.params;
-
-            // Ensure videoId is provided
-            if (!videoId) {
-                return next(new ErrorHandler('Video ID is required', 400));
-            }
-
-            // Make the API request to Vimeo
-            const response = await axios({
-                method: 'GET',
-                url: `https://api.vimeo.com/videos/${videoId}`,
-                headers: {
-                    Authorization: `Bearer ${process.env.VIMEO_ACCESS_TOKEN}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            // Extract the transcode status from the response
-            const transcodeStatus = response.data.transcode.status;
-
-            // Send the transcode status in the response
-            res.status(200).json({
-                success: true,
-                transcode_status: transcodeStatus,
-            });
-        } catch (error: any) {
-            // Pass any errors to the error handler
-            return next(new ErrorHandler(error.message, 500));
-        }
-    }
-);
