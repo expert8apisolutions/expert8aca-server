@@ -1,6 +1,6 @@
 import express from "express";
 import { authorizeRoles, isAutheticated } from "../middleware/auth";
-import { addFile, createFolder, deleteFile, deleteFolder, editFile, editFolder, getFolderAndFile, getLinkUploadVimeo, getSingleFolder, getVideoTranscodeStatus, updatePlayBackId } from "../controllers/file.controller";
+import { addFile, createFolder, deleteFile, deleteFolder, editFile, editFolder, getFolderAndFile, getLinkUploadVimeo, getSingleFolder, updatePlayBackId } from "../controllers/file.controller";
 
 const fileRouter = express.Router();
 
