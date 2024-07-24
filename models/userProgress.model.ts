@@ -11,12 +11,14 @@ export interface IUserProgress extends Document {
     video_compleated_id: IVideoCompleated[],
     current_video_id: String,
     current_video_time: Number,
+    total_watch_time: Number,
 }
 
 const userProgressSchema: Schema<IUserProgress> = new mongoose.Schema(
     {
         user_id: {
             type: String,
+            ref: "User",
             required: true,
         },
         course_id: {
@@ -35,6 +37,10 @@ const userProgressSchema: Schema<IUserProgress> = new mongoose.Schema(
         current_video_time: {
             type: Number,
             required: true,
+        },
+        total_watch_time: {
+            type: Number,
+            default: 0,
         },
     },
     { timestamps: true }
