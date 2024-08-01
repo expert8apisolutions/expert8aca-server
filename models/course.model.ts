@@ -53,6 +53,7 @@ interface IQuiz extends Document {
   demoUrl: string;
   benefits: { title: string }[];
   prerequisites: { title: string }[];
+  limitWatchedTime?: number;
   reviews: IReview[];
   courseData: ICourseData[];
   ratings?: number;
@@ -140,6 +141,10 @@ const courseSchema = new Schema<ICourse>({
   },
   benefits: [{title: String}],
   prerequisites: [{title: String}],
+  limitWatchedTime: {
+    type: Number,
+    default: 0,
+  },
   reviews: [reviewSchema],
    courseData: [courseDataSchema],
    ratings:{
