@@ -9,7 +9,7 @@ export interface IUserProgress extends Document {
     user_id: String,
     course_id: String,
     video_compleated_id: IVideoCompleated[],
-    current_video_id: String,
+    current_video_id?: String,
     current_video_time: Number,
     total_watch_time: Number,
 }
@@ -32,7 +32,6 @@ const userProgressSchema: Schema<IUserProgress> = new mongoose.Schema(
         ],
         current_video_id: {
             type: String,
-            required: true,
         },
         current_video_time: {
             type: Number,
