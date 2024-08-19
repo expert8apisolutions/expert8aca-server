@@ -176,7 +176,7 @@ export const addFile = CatchAsyncError(
                 req.body;
 
             const [checkLimit] = await Promise.all([getSumSizeAllFile()])
-            if (checkLimit + sizeInMB > LIMIT_STORAGE_IN_GB * 1000) {
+            if (checkLimit + (+sizeInMB) > LIMIT_STORAGE_IN_GB * 1000) {
                 return next(
                     new ErrorHandler(
                         `Storage limit exceeded. Limit is ${LIMIT_STORAGE_IN_GB} GB`,
