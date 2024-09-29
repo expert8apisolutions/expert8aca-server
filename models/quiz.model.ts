@@ -52,8 +52,8 @@ const QuizSchema: Schema = new Schema<IQuiz>({
     time_limit_minutes: { type: Number, required: false, default: 0 },
     quizItem: { type: [QuizItemSchema], required: true },
     total_questions: { type: Number, required: true, default: 0 },
-    
-},{
+
+}, {
     timestamps: true,
 });
 

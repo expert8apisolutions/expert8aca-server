@@ -5,7 +5,7 @@ import QuizModel from "../models/quiz.model";
 import CourseModel from "../models/course.model";
 import QuizSubmissionModel from "../models/quizSubmission.model";
 import mongoose from "mongoose";
-
+import uploadBase64File from "../services/r2.service"
 const QUIZ_STAGE = {
     NOT_START: "NOT_START",
     PENDING: "PENDING",
@@ -17,6 +17,16 @@ export const createQuiz = CatchAsyncError(
     async (req: Request, res: Response, next: NextFunction) => {
         try {
             const data = req.body;
+            for (let i = 0; i < data.quizItem.length; i++) {
+                if (data.quizItem[i].image_base64) {
+                    let url = await uploadBase64File(data.quizItem[i].image_base64)
+                    data.quizItem[i] = {
+                        ...data.quizItem[i],
+                        image_link: url,
+                        image_base64: ''
+                    }
+                }
+            }
             const quiz = await QuizModel.create({ ...data, total_questions: data.quizItem.length });
             res.status(201).json({
                 success: true,
@@ -91,7 +101,27 @@ export const getQuizById = CatchAsyncError(
 export const updateQuiz = CatchAsyncError(
     async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const quiz = await QuizModel.findByIdAndUpdate(req.params.quiz_id, { ...req.body, total_questions: req.body.quizItem.length });
+            const data = req.body;
+            for (let i = 0; i < data.quizItem.length; i++) {
+                if (data.quizItem[i].image_base64) {
+                    let url = await uploadBase64File(data.quizItem[i].image_base64)
+                    data.quizItem[i] = {
+                        ...data.quizItem[i],
+                        image_link: url,
+                        image_base64: ''
+                    }
+                } else {
+                    if (!data?.quizItem[i]?.image_link) {
+                        data.quizItem[i] = {
+                            ...data.quizItem[i],
+                            image_link: '',
+                            image_base64: ''
+                        }
+                    }
+                }
+            }
+
+            const quiz = await QuizModel.findByIdAndUpdate(req.params.quiz_id, { ...data, total_questions: data.quizItem.length });
             if (!quiz) {
                 return next(new ErrorHandler("Quiz not found", 404));
             }
