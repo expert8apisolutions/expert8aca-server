@@ -10,6 +10,7 @@ const quiz_model_1 = __importDefault(require("../models/quiz.model"));
 const course_model_1 = __importDefault(require("../models/course.model"));
 const quizSubmission_model_1 = __importDefault(require("../models/quizSubmission.model"));
 const mongoose_1 = __importDefault(require("mongoose"));
+const r2_service_1 = __importDefault(require("../services/r2.service"));
 const QUIZ_STAGE = {
     NOT_START: "NOT_START",
     PENDING: "PENDING",
@@ -19,6 +20,16 @@ const QUIZ_STAGE = {
 exports.createQuiz = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, res, next) => {
     try {
         const data = req.body;
+        for (let i = 0; i < data.quizItem.length; i++) {
+            if (data.quizItem[i].image_base64) {
+                let url = await (0, r2_service_1.default)(data.quizItem[i].image_base64);
+                data.quizItem[i] = {
+                    ...data.quizItem[i],
+                    image_link: url,
+                    image_base64: ''
+                };
+            }
+        }
         const quiz = await quiz_model_1.default.create({ ...data, total_questions: data.quizItem.length });
         res.status(201).json({
             success: true,
@@ -85,7 +96,27 @@ exports.getQuizById = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, res, n
 });
 exports.updateQuiz = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, res, next) => {
     try {
-        const quiz = await quiz_model_1.default.findByIdAndUpdate(req.params.quiz_id, { ...req.body, total_questions: req.body.quizItem.length });
+        const data = req.body;
+        for (let i = 0; i < data.quizItem.length; i++) {
+            if (data.quizItem[i].image_base64) {
+                let url = await (0, r2_service_1.default)(data.quizItem[i].image_base64);
+                data.quizItem[i] = {
+                    ...data.quizItem[i],
+                    image_link: url,
+                    image_base64: ''
+                };
+            }
+            else {
+                if (!data?.quizItem[i]?.image_link) {
+                    data.quizItem[i] = {
+                        ...data.quizItem[i],
+                        image_link: '',
+                        image_base64: ''
+                    };
+                }
+            }
+        }
+        const quiz = await quiz_model_1.default.findByIdAndUpdate(req.params.quiz_id, { ...data, total_questions: data.quizItem.length });
         if (!quiz) {
             return next(new ErrorHandler_1.default("Quiz not found", 404));
         }
