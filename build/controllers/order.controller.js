@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.webhookOrder = exports.sendTokenPayment = exports.getPaymentCourse = exports.newPayment = exports.checkPayment = exports.sendStripePublishableKey = exports.getAllOrders = exports.createOrderEbook = exports.createOrder = exports.createOrderEbookPostback = exports.createOrderPostback = void 0;
+exports.verifySlip = exports.webhookOrder = exports.sendTokenPayment = exports.getPaymentCourse = exports.newPayment = exports.checkPayment = exports.sendStripePublishableKey = exports.getAllOrders = exports.createOrderEbook = exports.createOrder = exports.createOrderEbookPostback = exports.createOrderPostback = void 0;
 const catchAsyncErrors_1 = require("../middleware/catchAsyncErrors");
 const ErrorHandler_1 = __importDefault(require("../utils/ErrorHandler"));
 const order_Model_1 = __importDefault(require("../models/order.Model"));
@@ -19,9 +19,13 @@ const ebook_model_1 = __importDefault(require("../models/ebook.model"));
 const gbPrimepay_service_1 = require("../services/gbPrimepay.service");
 const jwt_1 = require("../utils/jwt");
 const axios_1 = __importDefault(require("axios"));
+const dayjs_1 = __importDefault(require("dayjs"));
+const checkSlip_service_1 = require("../services/checkSlip.service");
+const orderEbook_model_1 = __importDefault(require("../models/orderEbook.model"));
 require("dotenv").config();
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const gbPrimepayService = new gbPrimepay_service_1.GbPrimepayService();
+const checkSlipApi = new checkSlip_service_1.CheckSlipService();
 const BASE_URL_PAYMENT_ORDER_DETAIL = 'https://apis.paysolutions.asia/order/orderdetailpost';
 const merchantIdLast5Char = process.env?.PAYMENT_MERCHANT_ID?.slice(3, 8);
 const defaultBody = { merchantId: merchantIdLast5Char, orderNo: "", productDetail: "" };
@@ -123,7 +127,7 @@ exports.createOrder = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, res, n
         const { courseId, payment_info, isFree } = req.body;
         const userId = req.user?._id;
         const user = await user_model_1.default.findById(userId);
-        const courseExistInUser = user?.courses.some((course) => course._id.toString() === courseId);
+        const courseExistInUser = user?.courses.some((course) => course.courseId?.toString() === courseId);
         if (courseExistInUser) {
             return next(new ErrorHandler_1.default("You have already purchased this course", 400));
         }
@@ -165,7 +169,11 @@ exports.createOrder = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, res, n
         catch (error) {
             return next(new ErrorHandler_1.default(error.message, 500));
         }
-        user?.courses.push(course?._id);
+        user?.courses.push({
+            courseId: course?._id,
+            orderDate: new Date(),
+            expireDate: (0, dayjs_1.default)().add(+process.env.EXPIRE_DATE_DEFAULT_COURSE_IN_DAY, 'day').toDate(),
+        });
         await redis_1.redis.set(req.user?._id, JSON.stringify(user));
         await user?.save();
         await notification_Model_1.default.create({
@@ -340,7 +348,7 @@ exports.getPaymentCourse = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, r
         if (!course) {
             return next(new ErrorHandler_1.default("Course not found", 404));
         }
-        const courseExistInUser = user?.courses.some((course) => course._id.toString() === courseId);
+        const courseExistInUser = user?.courses.some((course) => course.courseId?.toString() === courseId);
         if (courseExistInUser) {
             return next(new ErrorHandler_1.default("You have already purchased this course", 400));
         }
@@ -365,7 +373,7 @@ exports.getPaymentCourse = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, r
         return next(new ErrorHandler_1.default(error.message, 500));
     }
 });
-const createOrderCourse = async ({ courseId, userId, referenceNo, paymentInfo, }) => {
+const createOrderCourse = async ({ courseId, userId, referenceNo, paymentInfo, addressInfo, }) => {
     const user = await user_model_1.default.findById(userId);
     const course = await course_model_1.default.findById(courseId);
     if (!course) {
@@ -396,7 +404,11 @@ const createOrderCourse = async ({ courseId, userId, referenceNo, paymentInfo, }
     catch (error) {
         throw new Error(error.message);
     }
-    user?.courses.push(course?._id);
+    user?.courses.push({
+        courseId: course?._id,
+        orderDate: new Date(),
+        expireDate: (0, dayjs_1.default)().add(+process.env.EXPIRE_DATE_DEFAULT_COURSE_IN_DAY, 'day').toDate(),
+    });
     redis_1.redis.set(userId, JSON.stringify(user));
     notification_Model_1.default.create({
         user: user?._id,
@@ -411,6 +423,7 @@ const createOrderCourse = async ({ courseId, userId, referenceNo, paymentInfo, }
         userId: user?._id,
         referenceNo: referenceNo,
         payment_info: paymentInfo,
+        addressInfo,
     };
     const result = await order_Model_1.default.create(data);
     return result;
@@ -458,6 +471,173 @@ exports.webhookOrder = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, res, 
     }
     catch (error) {
         console.log("🚀 ~ file: order.controller.ts:155 ~ error:", error);
+        return next(new ErrorHandler_1.default(error.message, 500));
+    }
+});
+const createOrderEbookSlip = async ({ ebookId, userId, referenceNo, paymentInfo, }) => {
+    try {
+        const user = await user_model_1.default.findById(userId);
+        const ebook = await ebook_model_1.default.findById(ebookId);
+        if (!ebook) {
+            throw new Error("Ebook not found");
+        }
+        const mailData = {
+            order: {
+                _id: referenceNo,
+                name: ebook?.name,
+                price: ebook?.price,
+                date: new Date().toLocaleDateString("en-US", {
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                }),
+            },
+        };
+        try {
+            if (user) {
+                await (0, sendMail_1.default)({
+                    email: user.email,
+                    subject: "Order Confirmation",
+                    template: "order-confirmation.ejs",
+                    data: mailData,
+                });
+            }
+        }
+        catch (error) {
+            console.log("🚀 ~ createOrderEbookSlip error:", error);
+        }
+        user?.ebooks.push(ebook?._id);
+        await redis_1.redis.set(userId, JSON.stringify(user));
+        await user?.save();
+        notification_Model_1.default.create({
+            user: user?._id,
+            title: "New Order",
+            message: `You have a new order from ${ebook?.name}`,
+        });
+        ebook.purchased = ebook.purchased + 1;
+        await ebook.save();
+        const data = {
+            ebookId,
+            userId,
+            payment_info: paymentInfo ?? {},
+            referenceNo,
+        };
+        const resultOrder = await orderEbook_model_1.default.create(data);
+        return {
+            ebookId: resultOrder.ebookId,
+            referenceNo: resultOrder.referenceNo,
+        };
+    }
+    catch (error) {
+        throw new Error(error.message);
+    }
+};
+const checkName = (displayName) => {
+    return displayName?.includes(process.env.BANK_ACCOUNT_NAME_EN + '') || displayName?.includes(process.env.BANK_ACCOUNT_NAME_TH + '');
+};
+const getBankNoNumber = (bankNoPattern) => {
+    if (!bankNoPattern)
+        return 'not-match-bank-no';
+    return bankNoPattern?.replace?.(/\D/g, '');
+};
+const checkBankNo = (receiver) => {
+    const isBankAccount = process.env.BANK_ACCOUNT_NO?.includes(getBankNoNumber(receiver?.account?.value || ''));
+    const isBankProxy = process.env.BANK_ACCOUNT_NO?.includes(getBankNoNumber(receiver?.proxy?.value || ''));
+    return isBankAccount || isBankProxy;
+};
+const checkDuplicateOrder = async (transRef, productType) => {
+    let order = [];
+    if (productType === ProductType.COURSE) {
+        order = await order_Model_1.default.find({ referenceNo: transRef });
+    }
+    else if (productType === ProductType.EBOOK) {
+        order = await orderEbook_model_1.default.find({ referenceNo: transRef });
+    }
+    if (order.length > 0) {
+        return 'สลิปนี้ถูกใช้แล้ว';
+    }
+    return false;
+};
+const checkSlip = async (qrData, product, productType) => {
+    const dataSlip = await checkSlipApi.inquiry(qrData);
+    if (dataSlip) {
+        console.debug('checkSlip result: =>', {
+            receiver: dataSlip?.data?.receiver,
+            data: dataSlip?.data,
+        });
+        const isChecked = await checkDuplicateOrder(dataSlip?.data?.transRef, productType);
+        if (isChecked) {
+            throw new Error(isChecked);
+        }
+        const isCorrectName = checkName(dataSlip?.data?.receiver?.displayName);
+        const isCorrectBackNo = checkBankNo(dataSlip?.data?.receiver);
+        const isCorrectAmount = dataSlip?.data?.amount == product?.price;
+        if (!isCorrectBackNo) {
+            throw new Error('เลขบัญชีไม่ถูกต้อง');
+        }
+        if (!isCorrectName) {
+            throw new Error('ชื่อผู้รับเงินไม่ถูกต้อง');
+        }
+        if (!isCorrectAmount) {
+            throw new Error(`จำนวนเงินไม่ถูกต้อง`);
+        }
+        return dataSlip;
+    }
+    else {
+        throw new Error('ไม่พสลิป');
+    }
+};
+exports.verifySlip = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, res, next) => {
+    try {
+        const { productType, productId, qrData, addressInfo } = req.body;
+        const userId = req.user?._id;
+        if (!productType || !productId || !qrData) {
+            return next(new ErrorHandler_1.default('productType, productId, qrData is required', 500));
+        }
+        if (productType === ProductType.COURSE) {
+            const [product, user] = await Promise.all([
+                course_model_1.default.findById(productId),
+                user_model_1.default.findById(userId)
+            ]);
+            if (!product) {
+                return next(new ErrorHandler_1.default('Course not found', 500));
+            }
+            const courseExistInUser = user?.courses.some((course) => course._id.toString() === productId);
+            if (courseExistInUser) {
+                return next(new ErrorHandler_1.default("You have already purchased this course", 400));
+            }
+            const resultSlip = await checkSlip(qrData, product, ProductType.COURSE);
+            const result = await createOrderCourse({ courseId: productId, userId, referenceNo: resultSlip.data.transRef, paymentInfo: resultSlip, addressInfo });
+            res.status(200).json({
+                success: true,
+                result,
+            });
+        }
+        else if (productType === ProductType.EBOOK) {
+            const [product, user] = await Promise.all([
+                ebook_model_1.default.findById(productId),
+                user_model_1.default.findById(userId)
+            ]);
+            if (!product) {
+                return next(new ErrorHandler_1.default('Ebook not found', 500));
+            }
+            const ebookExistInUser = user?.ebooks.some((ebook) => ebook._id.toString() === productId);
+            if (ebookExistInUser) {
+                return next(new ErrorHandler_1.default("You have already purchased this ebook", 400));
+            }
+            const resultSlip = await checkSlip(qrData, product, ProductType.EBOOK);
+            const result = await createOrderEbookSlip({ ebookId: productId, userId, referenceNo: resultSlip.data.transRef, paymentInfo: resultSlip });
+            console.log("🚀 ~ result:", result);
+            res.status(200).json({
+                success: true,
+                result,
+            });
+        }
+        else {
+            return next(new ErrorHandler_1.default('productType not found', 500));
+        }
+    }
+    catch (error) {
         return next(new ErrorHandler_1.default(error.message, 500));
     }
 });

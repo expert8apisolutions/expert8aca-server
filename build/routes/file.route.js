@@ -16,4 +16,5 @@ fileRouter.post("/file/edit-folder/:id", auth_1.isAutheticated, (0, auth_1.autho
 fileRouter.delete("/file/delete-folder/:id", auth_1.isAutheticated, (0, auth_1.authorizeRoles)("admin"), file_controller_1.deleteFolder);
 fileRouter.delete("/file/delete-file/:id", auth_1.isAutheticated, (0, auth_1.authorizeRoles)("admin"), file_controller_1.deleteFile);
 fileRouter.post("/file/update-playback", auth_1.isAutheticated, (0, auth_1.authorizeRoles)("admin"), file_controller_1.updatePlayBackId);
+fileRouter.post("/file/get-link-upload", auth_1.isAutheticated, (0, auth_1.authorizeRoles)("admin"), file_controller_1.getLinkUploadVimeo);
 exports.default = fileRouter;

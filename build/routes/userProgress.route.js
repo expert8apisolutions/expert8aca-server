@@ -10,4 +10,6 @@ const userProgressRoute = express_1.default.Router();
 userProgressRoute.get("/user-progress/:courseId", auth_1.isAutheticated, userProgress_controller_1.getCurrentUserProgress);
 userProgressRoute.post("/update-user-progress/:courseId", auth_1.isAutheticated, userProgress_controller_1.updateUserProgress);
 userProgressRoute.post("/complete-user-progress/:courseId", auth_1.isAutheticated, userProgress_controller_1.updateUserCompleated);
+userProgressRoute.post("/update-watch-time/:courseId", auth_1.isAutheticated, userProgress_controller_1.updateUserTotalWatchTime);
+userProgressRoute.get('/user-progress-report/:courseId', userProgress_controller_1.getUserProgressList);
 exports.default = userProgressRoute;

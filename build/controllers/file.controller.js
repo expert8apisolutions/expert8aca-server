@@ -3,22 +3,19 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteFile = exports.deleteFolder = exports.editFile = exports.deleteFileInFolder = exports.getFolderAndFile = exports.addFile = exports.editFolder = exports.getSingleFolder = exports.createFolder = exports.updatePlayBackId = void 0;
+exports.getLinkUploadVimeo = exports.deleteFile = exports.deleteFolder = exports.editFile = exports.getFolderAndFile = exports.addFile = exports.editFolder = exports.getSingleFolder = exports.createFolder = exports.updatePlayBackId = void 0;
 const catchAsyncErrors_1 = require("../middleware/catchAsyncErrors");
 const ErrorHandler_1 = __importDefault(require("../utils/ErrorHandler"));
 const folder_model_1 = __importDefault(require("../models/folder.model"));
 const file_model_1 = __importDefault(require("../models/file.model"));
 const axios_1 = __importDefault(require("axios"));
-const headerApi_1 = require("../utils/headerApi");
-const checkVideoStatus_1 = require("../job/checkVideoStatus");
+const vimeoApi_service_1 = require("../services/vimeoApi.service");
 const LIMIT_STORAGE_IN_GB = +(process?.env?.LIMIT_STORAGE_IN_GB ?? 5);
 const LABEL_ID = process?.env?.STREAM_LABEL_ID;
+const vimeApi = new vimeoApi_service_1.VimeoService();
 const deleteAssetResource = async (assetId, awsId) => {
     try {
-        const result = await axios_1.default.post(`${process.env.CORE_API_UPLOAD_URL}/delete-asset`, {
-            assetId,
-            awsId,
-        }, { headers: headerApi_1.headerApiKey });
+        const result = await vimeApi.deleteVideo(assetId);
         return result;
     }
     catch (error) {
@@ -30,7 +27,7 @@ const findAndDeleteFile = async (fileId) => {
     if (!file) {
         return;
     }
-    if (file.assetId && file.awsId) {
+    if (file.assetId) {
         deleteAssetResource(file.assetId, file.awsId);
     }
     await file_model_1.default.findByIdAndDelete(fileId);
@@ -154,8 +151,8 @@ exports.editFolder = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, res, ne
 exports.addFile = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, res, next) => {
     try {
         const { name, sizeInMB, format, parentId, assetId, playbackId, status, awsId } = req.body;
-        const [checkLimit, checkPercent] = await Promise.all([getSumSizeAllFile(), (0, checkVideoStatus_1.checkVideoReady)(assetId)]);
-        if (checkLimit + sizeInMB > LIMIT_STORAGE_IN_GB * 1000) {
+        const [checkLimit] = await Promise.all([getSumSizeAllFile()]);
+        if (checkLimit + (+sizeInMB) > LIMIT_STORAGE_IN_GB * 1000) {
             return next(new ErrorHandler_1.default(`Storage limit exceeded. Limit is ${LIMIT_STORAGE_IN_GB} GB`, 400));
         }
         if (parentId) {
@@ -170,8 +167,8 @@ exports.addFile = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, res, next)
                 parentId,
                 assetId,
                 playbackId,
-                status,
-                percent: checkPercent.percent || 0,
+                status: 'preparing',
+                percent: 100,
                 awsId,
             };
             const result = await file_model_1.default.create(file);
@@ -192,8 +189,8 @@ exports.addFile = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, res, next)
                 parentId: null,
                 assetId,
                 playbackId,
-                status,
-                percent: checkPercent.percent || 0,
+                status: 'preparing',
+                percent: 100,
                 awsId
             };
             const result = await file_model_1.default.create(file);
@@ -270,24 +267,6 @@ exports.getFolderAndFile = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, r
         return next(new ErrorHandler_1.default(error.message, 500));
     }
 });
-exports.deleteFileInFolder = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, res, next) => {
-    try {
-        const fileId = req.params.id;
-        const file = await file_model_1.default.findById(fileId);
-        if (!file) {
-            return next(new ErrorHandler_1.default("File not found", 404));
-        }
-        await file.deleteOne({ id: fileId });
-        findAndDeleteFile(fileId);
-        res.status(200).json({
-            success: true,
-            message: "File deleted successfully",
-        });
-    }
-    catch (error) {
-        return next(new ErrorHandler_1.default(error.message, 400));
-    }
-});
 exports.editFile = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, res, next) => {
     try {
         const { name } = req.body;
@@ -331,7 +310,7 @@ exports.deleteFile = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, res, ne
         if (!file) {
             return next(new ErrorHandler_1.default("File not found", 404));
         }
-        await file_model_1.default.findByIdAndDelete(fileId);
+        // await FileModel.findByIdAndDelete(fileId);
         findAndDeleteFile(fileId);
         res.status(200).json({
             success: true,
@@ -340,5 +319,52 @@ exports.deleteFile = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, res, ne
     }
     catch (error) {
         return next(new ErrorHandler_1.default(error.message, 400));
+    }
+});
+exports.getLinkUploadVimeo = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, res, next) => {
+    try {
+        const { name, size } = req.body;
+        const response = await (0, axios_1.default)({
+            method: 'POST',
+            url: 'https://api.vimeo.com/me/videos',
+            headers: {
+                Authorization: `Bearer ${process.env.VIMEO_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            data: {
+                upload: {
+                    approach: 'tus',
+                    size: size,
+                },
+                name: name,
+            }
+        });
+        const linkUpload = response.data.upload.upload_link;
+        const linkVideo = response.data.player_embed_url;
+        const videoId = response.data.uri?.replace('/videos/', '');
+        const folderId = process.env.VIMEO_FOLDER_ID;
+        if (folderId && videoId) {
+            await (0, axios_1.default)({
+                method: 'PUT',
+                url: `https://api.vimeo.com/me/projects/${folderId}/videos/${videoId}`,
+                headers: {
+                    Authorization: `Bearer ${process.env.VIMEO_ACCESS_TOKEN}`,
+                    'Content-Type': 'application/json'
+                }
+            }).then((response) => {
+                console.log("🚀 ~ move folder:", response.data);
+            });
+        }
+        res.status(200).json({
+            success: true,
+            upload_link: linkUpload,
+            link: linkVideo,
+            videoId,
+            data: response.data
+        });
+    }
+    catch (error) {
+        console.log("🚀 ~ error:", error);
+        return next(new ErrorHandler_1.default(error.message, 500));
     }
 });

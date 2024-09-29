@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.generateVideoUrl = exports.deleteCourse = exports.getAdminAllCourses = exports.addReplyToReview = exports.addReview = exports.addAnwser = exports.addQuestion = exports.getCourseByUser = exports.getAllCourses = exports.getSingleCourse = exports.editCourse = exports.uploadCourse = exports.addCourseToUser = void 0;
+exports.generateVideoUrl = exports.deleteCourse = exports.getAdminAllCourses = exports.addReplyToReview = exports.addReview = exports.addAnwser = exports.addQuestion = exports.getCourseByUser = exports.getAllCourses = exports.getSingleCourse = exports.editCourse = exports.uploadCourse = exports.updateCourseToUser = exports.addCourseToUser = void 0;
 const catchAsyncErrors_1 = require("../middleware/catchAsyncErrors");
 const ErrorHandler_1 = __importDefault(require("../utils/ErrorHandler"));
 const cloudinary_1 = __importDefault(require("cloudinary"));
@@ -20,9 +20,9 @@ const user_model_1 = __importDefault(require("../models/user.model"));
 const order_service_1 = require("../services/order.service");
 exports.addCourseToUser = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, res, next) => {
     try {
-        const { user_id, course_id } = req.body;
+        const { user_id, course_id, expireDate } = req.body;
         const user = await user_model_1.default.findById(user_id);
-        const courseExistInUser = user?.courses.some((course) => course._id.toString() === course_id);
+        const courseExistInUser = user?.courses.some((course) => course?.courseId?.toString() === course_id);
         if (courseExistInUser) {
             return next(new ErrorHandler_1.default("You have already purchased this course", 400));
         }
@@ -34,6 +34,7 @@ exports.addCourseToUser = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, re
             courseId: course._id,
             userId: user?._id,
             payment_info: {},
+            referenceNo: (Math.floor(Date.now() / 10)) + '-force',
         };
         const mailData = {
             order: {
@@ -50,7 +51,7 @@ exports.addCourseToUser = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, re
         const html = await ejs_1.default.renderFile(path_1.default.join(__dirname, "../mails/order-confirmation.ejs"), { order: mailData });
         try {
             if (user) {
-                await (0, sendMail_1.default)({
+                (0, sendMail_1.default)({
                     email: user.email,
                     subject: "Order Confirmation",
                     template: "order-confirmation.ejs",
@@ -59,12 +60,17 @@ exports.addCourseToUser = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, re
             }
         }
         catch (error) {
-            return next(new ErrorHandler_1.default(error.message, 500));
+            console.log("🚀 ~ error:", error);
+            // return next(new ErrorHandler(error.message, 500));
         }
-        user?.courses.push(course?._id);
+        user?.courses.push({
+            courseId: course?._id,
+            orderDate: new Date(),
+            expireDate: expireDate,
+        });
         await redis_1.redis.set(user_id, JSON.stringify(user));
         await user?.save();
-        await notification_Model_1.default.create({
+        notification_Model_1.default.create({
             user: user?._id,
             title: "New Order",
             message: `You have a new order from ${course?.name}`,
@@ -74,6 +80,44 @@ exports.addCourseToUser = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, re
         (0, order_service_1.newOrder)(data, res, next);
     }
     catch (error) {
+        return next(new ErrorHandler_1.default(error.message, 500));
+    }
+});
+exports.updateCourseToUser = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, res, next) => {
+    try {
+        const { user_id, course_id, expireDate } = req.body;
+        const user = await user_model_1.default.findById(user_id);
+        const courseExistInUser = user?.courses.some((course) => course?.courseId?.toString() === course_id);
+        if (!courseExistInUser) {
+            return next(new ErrorHandler_1.default("Course Not Exits In User", 400));
+        }
+        const course = await course_model_1.default.findById(course_id);
+        if (!course) {
+            return next(new ErrorHandler_1.default("Course not found", 404));
+        }
+        const newCourse = user?.courses.map(ele => {
+            if (ele.courseId.toString() === course_id) {
+                return ({
+                    ...ele,
+                    expireDate
+                });
+            }
+            return ({
+                ...ele
+            });
+        });
+        if (user) {
+            user.courses = newCourse;
+        }
+        await redis_1.redis.set(user_id, JSON.stringify(user));
+        await user?.save();
+        res.status(201).json({
+            success: true,
+            user,
+        });
+    }
+    catch (error) {
+        console.log("🚀 ~ file: course.controller.ts:156 ~ error:", error);
         return next(new ErrorHandler_1.default(error.message, 500));
     }
 });
@@ -90,6 +134,12 @@ exports.uploadCourse = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, res, 
                 public_id: myCloud.public_id,
                 url: myCloud.secure_url,
             };
+        }
+        if (!data.quiz.postTestEnabled) {
+            delete data.quiz.postTestId;
+        }
+        if (!data.quiz.preTestEnabled) {
+            delete data.quiz.preTestId;
         }
         (0, course_service_1.createCourse)(data, res, next);
     }
@@ -114,7 +164,7 @@ exports.editCourse = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, res, ne
                 url: myCloud.secure_url,
             };
         }
-        if (thumbnail.startsWith("https")) {
+        if (thumbnail?.startsWith("https")) {
             data.thumbnail = {
                 public_id: courseData?.thumbnail.public_id,
                 url: courseData?.thumbnail.url,
@@ -136,9 +186,13 @@ exports.editCourse = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, res, ne
 exports.getSingleCourse = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, res, next) => {
     try {
         const courseId = req.params.id;
-        const course = await course_model_1.default.findOne({ _id: req.params.id, status: 'Public' }).select("-courseData.videoUrl -courseData.suggestion -courseData.questions -courseData.links");
+        let course = await course_model_1.default.findOne({ _id: req.params.id, status: 'Public' }).populate('quiz.postTestId').select("-courseData.videoUrl -courseData.suggestion -courseData.questions -courseData.links -quiz.postTestId.quizItem");
         if (!course) {
             return next(new ErrorHandler_1.default("Course not found", 404));
+        }
+        if (course.quiz.postTestId) {
+            course.quiz.postTestId.total = course.quiz.postTestId.quizItem.length;
+            course.quiz.postTestId.quizItem = undefined;
         }
         await redis_1.redis.set(courseId, JSON.stringify(course), "EX", 604800); // 7days
         res.status(200).json({
@@ -191,7 +245,7 @@ exports.getCourseByUser = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, re
     try {
         const userCourseList = req.user?.courses;
         const courseId = req.params.id;
-        const courseExists = userCourseList?.find((course) => course._id.toString() === courseId);
+        const courseExists = userCourseList?.find((course) => course.courseId?.toString() === courseId);
         if (!courseExists) {
             return next(new ErrorHandler_1.default("You are not eligible to access this course", 404));
         }
@@ -306,7 +360,7 @@ exports.addReview = (0, catchAsyncErrors_1.CatchAsyncError)(async (req, res, nex
         const userCourseList = req.user?.courses;
         const courseId = req.params.id;
         // check if courseId already exists in userCourseList based on _id
-        const courseExists = userCourseList?.some((course) => course._id.toString() === courseId.toString());
+        const courseExists = userCourseList?.some((course) => course.courseId.toString() === courseId.toString());
         if (!courseExists) {
             return next(new ErrorHandler_1.default("You are not eligible to access this course", 404));
         }

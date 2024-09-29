@@ -12,4 +12,5 @@ orderRouter.get("/create-order-ebook-postback", order_controller_1.createOrderEb
 orderRouter.get("/get-orders", auth_1.isAutheticated, (0, auth_1.authorizeRoles)("admin"), order_controller_1.getAllOrders);
 orderRouter.post("/payment/token", auth_1.isAutheticated, order_controller_1.sendTokenPayment);
 orderRouter.post("/payment", auth_1.isAutheticated, order_controller_1.newPayment);
+orderRouter.post("/verify-slip", auth_1.isAutheticated, order_controller_1.verifySlip);
 exports.default = orderRouter;

@@ -99,6 +99,10 @@ const courseSchema = new mongoose_1.Schema({
     },
     benefits: [{ title: String }],
     prerequisites: [{ title: String }],
+    limitWatchedTime: {
+        type: Number,
+        default: 0,
+    },
     reviews: [reviewSchema],
     courseData: [courseDataSchema],
     ratings: {
@@ -108,6 +112,36 @@ const courseSchema = new mongoose_1.Schema({
     purchased: {
         type: Number,
         default: 0,
+    },
+    quiz: {
+        preTestEnabled: {
+            type: Boolean,
+            default: false,
+        },
+        preTestTitle: {
+            type: String,
+        },
+        preTestId: {
+            type: mongoose_1.default.Types.ObjectId,
+            ref: "Quiz",
+            required: false,
+        },
+        postTestEnabled: {
+            type: Boolean,
+            default: false,
+        },
+        postTestTitle: {
+            type: String,
+        },
+        postTestId: {
+            type: mongoose_1.default.Types.ObjectId,
+            ref: "Quiz",
+            required: false,
+        },
+    },
+    certificate: {
+        type: String,
+        required: false,
     },
 }, { timestamps: true });
 const CourseModel = mongoose_1.default.model("Course", courseSchema);

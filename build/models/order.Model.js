@@ -41,6 +41,11 @@ const orderSchema = new mongoose_1.Schema({
         type: Object,
         // required: true
     },
+    addressInfo: {
+        fullname: { type: String, },
+        phone: { type: String, },
+        address: { type: String, },
+    }
 }, { timestamps: true });
 const OrderModel = mongoose_1.default.model('Order', orderSchema);
 exports.default = OrderModel;

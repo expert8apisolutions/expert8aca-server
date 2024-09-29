@@ -37,6 +37,9 @@ const orderSchema = new mongoose_1.Schema({
         type: Object,
         // required: true
     },
+    referenceNo: {
+        type: String,
+    }
 }, { timestamps: true });
 const OrderEbookModel = mongoose_1.default.model('order_ebook', orderSchema);
 exports.default = OrderEbookModel;

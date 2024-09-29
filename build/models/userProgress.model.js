@@ -7,6 +7,7 @@ const mongoose_1 = __importDefault(require("mongoose"));
 const userProgressSchema = new mongoose_1.default.Schema({
     user_id: {
         type: String,
+        ref: "User",
         required: true,
     },
     course_id: {
@@ -20,11 +21,14 @@ const userProgressSchema = new mongoose_1.default.Schema({
     ],
     current_video_id: {
         type: String,
-        required: true,
     },
     current_video_time: {
         type: Number,
         required: true,
+    },
+    total_watch_time: {
+        type: Number,
+        default: 0,
     },
 }, { timestamps: true });
 const userProgressModel = mongoose_1.default.model("User_progress", userProgressSchema);
