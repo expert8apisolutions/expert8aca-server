@@ -105,7 +105,7 @@ export const addCourseToUser = CatchAsyncError(
 
 export const updateCourseToUser = CatchAsyncError(
   async (req: Request, res: Response, next: NextFunction) => {
-    try{
+    try {
       const { user_id, course_id, expireDate } = req.body
 
       const user: IUser | null = await userModel.findById(user_id);
@@ -120,7 +120,7 @@ export const updateCourseToUser = CatchAsyncError(
         );
       }
 
-      const course:ICourse | null = await CourseModel.findById(course_id);
+      const course: ICourse | null = await CourseModel.findById(course_id);
 
       if (!course) {
         return next(new ErrorHandler("Course not found", 404));
@@ -128,7 +128,7 @@ export const updateCourseToUser = CatchAsyncError(
 
       const newCourse: any = user?.courses.map(ele => {
 
-        if(ele.courseId.toString() === course_id){
+        if (ele.courseId.toString() === course_id) {
           return ({
             ...ele,
             expireDate
@@ -139,9 +139,9 @@ export const updateCourseToUser = CatchAsyncError(
           ...ele
         })
       })
-      
 
-      if(user){
+
+      if (user) {
         user.courses = newCourse
       }
 
@@ -154,7 +154,7 @@ export const updateCourseToUser = CatchAsyncError(
         user,
       });
 
-    }catch(error: any){
+    } catch (error: any) {
       console.log("🚀 ~ file: course.controller.ts:156 ~ error:", error)
       return next(new ErrorHandler(error.message, 500));
     }
@@ -180,11 +180,11 @@ export const uploadCourse = CatchAsyncError(
         };
       }
 
-      if(!data.quiz.postTestEnabled){
+      if (!data.quiz.postTestEnabled) {
         delete data.quiz.postTestId
       }
 
-      if(!data.quiz.preTestEnabled){
+      if (!data.quiz.preTestEnabled) {
         delete data.quiz.preTestId
       }
 
@@ -220,7 +220,7 @@ export const editCourse = CatchAsyncError(
         };
       }
 
-      if (thumbnail.startsWith("https")) {
+      if (thumbnail?.startsWith("https")) {
         data.thumbnail = {
           public_id: courseData?.thumbnail.public_id,
           url: courseData?.thumbnail.url,
@@ -254,11 +254,11 @@ export const getSingleCourse = CatchAsyncError(
         "-courseData.videoUrl -courseData.suggestion -courseData.questions -courseData.links -quiz.postTestId.quizItem"
       );
 
-      if(!course) {
+      if (!course) {
         return next(new ErrorHandler("Course not found", 404));
       }
-    
-      if(course.quiz.postTestId){
+
+      if (course.quiz.postTestId) {
         course.quiz.postTestId.total = course.quiz.postTestId.quizItem.length
         course.quiz.postTestId.quizItem = undefined
       }
