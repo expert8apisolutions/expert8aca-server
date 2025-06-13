@@ -4,6 +4,7 @@ import ErrorHandler from "../utils/ErrorHandler";
 import OrderModel, { IAddressInfo, IOrder } from "../models/order.Model";
 import userModel from "../models/user.model";
 import CourseModel, { ICourse } from "../models/course.model";
+import CartModel from "../models/cart.model";
 import path from "path";
 import ejs from "ejs";
 import sendMail from "../utils/sendMail";
@@ -404,7 +405,8 @@ export const newPayment = CatchAsyncError(
 
 enum ProductType {
   COURSE = "course",
-  EBOOK = "ebook"
+  EBOOK = "ebook",
+  CART = "cart"
 }
 
 enum PaymentStatus {
@@ -697,21 +699,16 @@ const checkBankNo = (receiver: any) => {
 }
 
 const checkDuplicateOrder = async (transRef: string, productType: string) => {
-  let order = []
-
-  if (productType === ProductType.COURSE) {
-    order = await OrderModel.find({ referenceNo: transRef })
+  if (productType === ProductType.COURSE || productType === ProductType.CART) {
+    const order = await OrderModel.findOne({ referenceNo: transRef })
+    return order ? 'สลิปนี้ถูกใช้แล้ว' : false
   }
   else if (productType === ProductType.EBOOK) {
-    order = await OrderEbookModel.find({ referenceNo: transRef })
-  }
-
-  if (order.length > 0) {
-    return 'สลิปนี้ถูกใช้แล้ว'
+    const order = await OrderEbookModel.findOne({ referenceNo: transRef })
+    return order ? 'สลิปนี้ถูกใช้แล้ว' : false
   }
   return false
 }
-
 
 const checkSlip = async (qrData: any, product: ICourse | IEbook, productType: string) => {
   const dataSlip = await checkSlipApi.inquiry(qrData)
@@ -755,7 +752,90 @@ export const verifySlip = CatchAsyncError(
         return next(new ErrorHandler('productType, productId, qrData is required', 500));
       }
 
-      if (productType === ProductType.COURSE) {
+      if (productType === ProductType.CART) {
+        // Get the user
+        const user = await userModel.findById(userId);
+        if (!user) {
+          return next(new ErrorHandler('User not found', 404));
+        }
+
+        // Get all cart items
+        const cartItems = await CartModel.find({ userId });
+        
+        if (!cartItems || cartItems.length === 0) {
+          return next(new ErrorHandler('Your cart is empty', 400));
+        }
+
+        // Get course details for each cart item
+        const courseIds = cartItems.map((item: any) => item.courseId);
+        const courses = await CourseModel.find({ _id: { $in: courseIds } });
+
+        // Calculate total price
+        const totalPrice = courses.reduce((sum, course) => sum + course.price, 0);
+
+        // Check if the slip payment matches the total price
+        const resultSlip = await checkSlip(qrData, { 
+          price: totalPrice, 
+          name: 'Cart Checkout',
+          description: 'Multiple courses checkout',
+          thumbnail: { url: '', public_id: '' }
+        } as ICourse, ProductType.CART);
+
+        // Create orders for each course
+        const orderResults = [];
+        for (const course of courses) {
+          // Check if user already has this course
+          const courseExistInUser = user.courses.some(
+            (userCourse: any) => userCourse.courseId?.toString() === course._id.toString()
+          );
+
+          if (!courseExistInUser) {
+            // Add course to user
+            user.courses.push({
+              courseId: course._id,
+              orderDate: new Date(),
+              expireDate: dayjs().add(+(process.env.EXPIRE_DATE_DEFAULT_COURSE_IN_DAY as string), 'day').toDate(),
+            });
+
+            // Create order record
+            const orderResult = await createOrderCourse({
+              courseId: course._id.toString(),
+              userId,
+              referenceNo: resultSlip.data.transRef,
+              paymentInfo: resultSlip,
+              addressInfo
+            });
+
+            orderResults.push(orderResult);
+
+            // Update course purchase count
+            course.purchased = course.purchased + 1;
+            await course.save();
+
+            // Create notification
+            await NotificationModel.create({
+              user: userId,
+              title: "New Order",
+              message: `You have a new order from ${course.name}`,
+            });
+          }
+        }
+
+        // Save user changes
+        await user.save();
+        await redis.set(userId, JSON.stringify(user));
+
+        // Clear the cart after successful checkout
+        await CartModel.deleteMany({ userId });
+
+        res.status(200).json({
+          success: true,
+          result: {
+            coursesPurchased: orderResults.length,
+            totalPrice
+          },
+        });
+      } else if (productType === ProductType.COURSE) {
         const [product, user] = await Promise.all([
           CourseModel.findById(productId),
           userModel.findById(userId)

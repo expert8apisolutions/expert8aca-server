@@ -160,19 +160,33 @@ export const checkoutCart = CatchAsyncError(
       // Calculate total price
       const totalPrice = courses.reduce((sum, course) => sum + course.price, 0);
 
-      // Create orders for each course
-      // This is a placeholder - you would need to implement the actual order creation logic
-      // similar to your existing createOrder function but adapted for multiple courses
-
-      // Clear the cart after successful checkout
-      await CartModel.deleteMany({ userId });
-
-      res.status(200).json({
-        success: true,
-        message: "Checkout successful",
-        totalPrice,
-        coursesPurchased: courses.length,
-      });
+      // Handle payment based on payment method
+      if (payment_info.type === "slip" || payment_info.type === "visa") {
+        // For slip or visa payment, we'll handle it in the verifySlip endpoint
+        // Return cart information for the frontend to process
+        return res.status(200).json({
+          success: true,
+          cartInfo: {
+            totalPrice,
+            coursesPurchased: courses.length,
+            courses: courses.map(course => ({
+              id: course._id,
+              name: course.name,
+              price: course.price,
+              thumbnail: course.thumbnail
+            }))
+          }
+        });
+      } else if (payment_info.type === "card") {
+        // For card payment (Stripe), implement Stripe payment logic here
+        // This would be similar to your existing Stripe payment implementation
+        // but adapted for multiple courses
+        
+        // For now, we'll return an error as this is not yet implemented
+        return next(new ErrorHandler("Card payment for cart checkout is not yet implemented", 501));
+      } else {
+        return next(new ErrorHandler("Invalid payment method", 400));
+      }
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 500));
     }
