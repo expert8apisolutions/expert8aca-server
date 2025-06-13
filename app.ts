@@ -17,6 +17,7 @@ import blogRouter from "./routes/blog.route";
 import userProgressRoute from "./routes/userProgress.route";
 import fileRouter from "./routes/file.route";
 import quizRouter from "./routes/quiz.route";
+import cartRouter from "./routes/cart.route";
 
 
 
@@ -57,6 +58,7 @@ app.use(
   fileRouter,
   userProgressRoute,
   quizRouter,
+  cartRouter,
 );
 
 app.get("/test", (req: Request, res: Response, next: NextFunction) => {
